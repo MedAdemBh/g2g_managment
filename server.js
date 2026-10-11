@@ -193,20 +193,18 @@ app.get('/api/catalog', (req, res) => {
 const g2gPriceCache = new Map();
 const CACHE_TTL_MS = 60 * 1000;
 
-app.get('/api/g2g-prices', async (req, res) => {
-  const query = (req.query.query || req.query.q || '').trim();
-  if (!query) {
-    return res.status(400).json({ success: false, error: 'Query parameter is required' });
-  }
+async function fetchG2GLowestOffer(query) {
+  const trimmed = (query || '').trim();
+  if (!trimmed) return null;
 
-  const cacheKey = query.toLowerCase();
+  const cacheKey = trimmed.toLowerCase();
   const cached = g2gPriceCache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
-    return res.json({ success: true, ...cached.data, fromCache: true });
+    return { ...cached.data, fromCache: true };
   }
 
   try {
-    const url = `https://sls.g2g.com/offer/search?service_id=0765978e-3fdf-48b4-bed3-184823aa439e&brand_id=lgc_game_35181&country=US&currency=USD&q=${encodeURIComponent(query)}&sort=lowest_price`;
+    const url = `https://sls.g2g.com/offer/search?service_id=0765978e-3fdf-48b4-bed3-184823aa439e&brand_id=lgc_game_35181&country=US&currency=USD&q=${encodeURIComponent(trimmed)}&sort=lowest_price`;
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -215,7 +213,7 @@ app.get('/api/g2g-prices', async (req, res) => {
     });
 
     if (!response.ok) {
-      throw new Error(`G2G gateway error: HTTP ${response.status}`);
+      throw new Error(`HTTP ${response.status}`);
     }
 
     const data = await response.json();
@@ -243,7 +241,7 @@ app.get('/api/g2g-prices', async (req, res) => {
     const recommendedPrice = lowestPrice > 0.05 ? Math.max(0.01, +(lowestPrice - 0.01).toFixed(2)) : +(lowestPrice * 0.95).toFixed(3);
 
     const resultPayload = {
-      query,
+      query: trimmed,
       game: 'ARC Raiders',
       totalFound: rawResults.length,
       lowestPrice: +lowestPrice.toFixed(2),
@@ -257,11 +255,50 @@ app.get('/api/g2g-prices', async (req, res) => {
     };
 
     g2gPriceCache.set(cacheKey, { timestamp: Date.now(), data: resultPayload });
-    return res.json({ success: true, ...resultPayload });
+    return resultPayload;
   } catch (err) {
-    console.error('Error fetching G2G market prices:', err);
-    return res.status(500).json({ success: false, error: 'Failed to retrieve live G2G prices', details: err.message });
+    return {
+      query: trimmed,
+      game: 'ARC Raiders',
+      error: err.message,
+      lowestPrice: 0,
+      formattedLowestPrice: '$0.00',
+      averagePrice: 0,
+      formattedAveragePrice: '$0.00',
+      recommendedPrice: 0,
+      formattedRecommendedPrice: '$0.00',
+      totalFound: 0,
+      top5: [],
+      fetchedAt: new Date().toISOString()
+    };
   }
+}
+
+// Single item price check
+app.get('/api/g2g-prices', async (req, res) => {
+  const query = (req.query.query || req.query.q || '').trim();
+  if (!query) {
+    return res.status(400).json({ success: false, error: 'Query parameter is required' });
+  }
+
+  const result = await fetchG2GLowestOffer(query);
+  if (result.error && (!result.top5 || result.top5.length === 0)) {
+    return res.status(500).json({ success: false, ...result });
+  }
+  return res.json({ success: true, ...result });
+});
+
+// Multi-item price batch check (choose multiple products at once)
+app.post('/api/g2g-prices/batch', async (req, res) => {
+  const items = Array.isArray(req.body.items) ? req.body.items : (Array.isArray(req.body.queries) ? req.body.queries : []);
+  const cleanItems = items.map((it) => (typeof it === 'string' ? it.trim() : '')).filter(Boolean).slice(0, 30);
+
+  if (cleanItems.length === 0) {
+    return res.status(400).json({ success: false, error: 'Provide at least one item name in the items array.' });
+  }
+
+  const results = await Promise.all(cleanItems.map((query) => fetchG2GLowestOffer(query)));
+  return res.json({ success: true, count: results.length, results });
 });
 
 // 1. Get entire state

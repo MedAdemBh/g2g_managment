@@ -1211,3 +1211,102 @@ textarea.form-control {
   to { transform: rotate(360deg); }
 }
 
+/* ========================================================
+   MULTI-ITEM RADAR STYLES
+   ======================================================== */
+.radar-selected-tray {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px dashed rgba(0, 240, 255, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-top: 14px;
+}
+
+.radar-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  min-height: 32px;
+  align-items: center;
+}
+
+.radar-chip {
+  background: rgba(0, 240, 255, 0.12);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  color: #fff;
+  border-radius: var(--radius-full);
+  padding: 4px 10px 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.radar-chip-remove {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.radar-chip-remove:hover {
+  color: var(--accent-red);
+}
+
+.radar-multi-table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+}
+
+.radar-multi-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.radar-multi-table th {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.radar-multi-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.radar-multi-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.radar-offers-dropdown-container {
+  display: none;
+  background: rgba(10, 15, 25, 0.8);
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  margin-top: 10px;
+  border: 1px solid var(--border-bright);
+}
+
+.radar-offers-dropdown-container.show {
+  display: block;
+}
+
+

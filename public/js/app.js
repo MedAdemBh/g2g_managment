@@ -1286,34 +1286,124 @@
     setupRadarEvents();
   }
 
+  // Multi-Item Radar Queue State
+  let radarQueue = [];
+
+  function addRadarQueueItem(itemName) {
+    if (!itemName) return;
+    const parts = itemName.split(',').map(s => s.trim()).filter(Boolean);
+    parts.forEach(part => {
+      if (!radarQueue.includes(part)) {
+        radarQueue.push(part);
+      }
+    });
+    renderRadarQueue();
+  }
+
+  function removeRadarQueueItem(itemName) {
+    radarQueue = radarQueue.filter(it => it !== itemName);
+    renderRadarQueue();
+  }
+
+  function clearRadarQueue() {
+    radarQueue = [];
+    renderRadarQueue();
+    const multiArea = document.getElementById('radarMultiResultsArea');
+    const singleArea = document.getElementById('radarResultsArea');
+    const placeholder = document.getElementById('radarPlaceholder');
+    const errorBox = document.getElementById('radarErrorBox');
+    if (multiArea) multiArea.style.display = 'none';
+    if (singleArea) singleArea.style.display = 'none';
+    if (placeholder) placeholder.style.display = 'block';
+    if (errorBox) errorBox.style.display = 'none';
+  }
+
+  function renderRadarQueue() {
+    const container = document.getElementById('radarChipsContainer');
+    const counter = document.getElementById('radarQueueCount');
+    const btnText = document.getElementById('radarScanBtnText');
+
+    if (counter) counter.textContent = radarQueue.length;
+
+    if (btnText) {
+      if (radarQueue.length > 1) {
+        btnText.textContent = `Scan All (${radarQueue.length}) Items`;
+      } else if (radarQueue.length === 1) {
+        btnText.textContent = `Scan 5 Lowest Prices`;
+      } else {
+        btnText.textContent = `Scan Lowest Prices`;
+      }
+    }
+
+    if (!container) return;
+
+    if (radarQueue.length === 0) {
+      container.innerHTML = `
+        <span id="radarEmptyQueueNotice" style="font-size: 12px; color: var(--text-dim); font-style: italic;">
+          No products selected yet. Pick items from above or click popular buttons below to compare multiple items at once.
+        </span>
+      `;
+      return;
+    }
+
+    container.innerHTML = radarQueue.map(item => `
+      <div class="radar-chip">
+        <span>${escapeHtml(item)}</span>
+        <button type="button" class="radar-chip-remove" data-remove-item="${escapeHtml(item)}" title="Remove ${escapeHtml(item)}">&times;</button>
+      </div>
+    `).join('');
+  }
+
   function setupRadarEvents() {
     const categorySelect = document.getElementById('radarCategorySelect');
     const presetSelect = document.getElementById('radarProductPreset');
     const searchInput = document.getElementById('radarSearchInput');
+    const addBtn = document.getElementById('btnAddItemToQueue');
+    const addAllCategoryBtn = document.getElementById('btnAddAllCategory');
+    const clearQueueBtn = document.getElementById('btnClearQueue');
     const scanBtn = document.getElementById('btnScanG2GPrices');
-    const clearBtn = document.getElementById('btnClearRadar');
+    const chipsContainer = document.getElementById('radarChipsContainer');
+    const multiTableBody = document.getElementById('radarMultiTableBody');
 
     if (categorySelect) {
       categorySelect.addEventListener('change', populateRadarPresets);
     }
 
-    if (presetSelect && searchInput) {
+    // Automatically add preset to queue on select
+    if (presetSelect) {
       presetSelect.addEventListener('change', () => {
         if (presetSelect.value) {
-          searchInput.value = presetSelect.value;
-          triggerRadarScan(presetSelect.value);
+          addRadarQueueItem(presetSelect.value);
+          presetSelect.selectedIndex = 0;
         }
       });
     }
 
-    if (scanBtn) {
-      scanBtn.addEventListener('click', () => {
-        const query = searchInput ? searchInput.value.trim() : '';
-        if (!query) {
-          showToast('Please type an item name or pick a preset to scan G2G.', 'warning');
-          return;
+    // Add all in category button
+    if (addAllCategoryBtn) {
+      addAllCategoryBtn.addEventListener('click', () => {
+        const cat = categorySelect ? categorySelect.value : '';
+        const items = cat && arcCatalog[cat] ? arcCatalog[cat] : Object.values(arcCatalog).flat();
+        if (items.length > 0) {
+          items.forEach(it => {
+            if (!radarQueue.includes(it)) radarQueue.push(it);
+          });
+          renderRadarQueue();
+          showToast(`Added ${items.length} items to scan list!`, 'success');
         }
-        triggerRadarScan(query);
+      });
+    }
+
+    // Add custom typed item
+    if (addBtn && searchInput) {
+      addBtn.addEventListener('click', () => {
+        const val = searchInput.value.trim();
+        if (val) {
+          addRadarQueueItem(val);
+          searchInput.value = '';
+        } else {
+          showToast('Please type an item name to add.', 'warning');
+        }
       });
     }
 
@@ -1321,33 +1411,75 @@
       searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
-          const query = searchInput.value.trim();
-          if (query) triggerRadarScan(query);
+          const val = searchInput.value.trim();
+          if (val) {
+            addRadarQueueItem(val);
+            searchInput.value = '';
+          }
         }
       });
     }
 
-    if (clearBtn && searchInput) {
-      clearBtn.addEventListener('click', () => {
-        searchInput.value = '';
-        if (presetSelect) presetSelect.value = '';
-        const resultsArea = document.getElementById('radarResultsArea');
-        const placeholder = document.getElementById('radarPlaceholder');
-        const errorBox = document.getElementById('radarErrorBox');
-        if (resultsArea) resultsArea.style.display = 'none';
-        if (placeholder) placeholder.style.display = 'block';
-        if (errorBox) errorBox.style.display = 'none';
+    // Clear Queue
+    if (clearQueueBtn) {
+      clearQueueBtn.addEventListener('click', clearRadarQueue);
+    }
+
+    // Remove single chip delegation
+    if (chipsContainer) {
+      chipsContainer.addEventListener('click', (e) => {
+        const removeBtn = e.target.closest('[data-remove-item]');
+        if (removeBtn) {
+          removeRadarQueueItem(removeBtn.dataset.removeItem);
+        }
       });
     }
 
-    // Popular tags
+    // Toggle details row in multi-item comparison table
+    if (multiTableBody) {
+      multiTableBody.addEventListener('click', (e) => {
+        const toggleBtn = e.target.closest('[data-toggle-details]');
+        if (toggleBtn) {
+          const targetId = toggleBtn.dataset.toggleDetails;
+          const targetRow = document.getElementById(targetId);
+          if (targetRow) {
+            const isHidden = targetRow.style.display === 'none';
+            targetRow.style.display = isHidden ? 'table-row' : 'none';
+            toggleBtn.innerHTML = isHidden ? 'Hide Top 5 ▴' : 'Top 5 Sellers ▾';
+          }
+        }
+      });
+    }
+
+    // Quick tag buttons add directly to queue
     document.querySelectorAll('.radar-tag-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const q = btn.dataset.query;
-        if (searchInput) searchInput.value = q;
-        triggerRadarScan(q);
+        addRadarQueueItem(q);
       });
     });
+
+    // Main Scan Button
+    if (scanBtn) {
+      scanBtn.addEventListener('click', () => {
+        const queryText = searchInput ? searchInput.value.trim() : '';
+        if (queryText && !radarQueue.includes(queryText)) {
+          addRadarQueueItem(queryText);
+          searchInput.value = '';
+        }
+
+        if (radarQueue.length === 0) {
+          showToast('Please select or add at least one product to check.', 'warning');
+          return;
+        }
+
+        if (radarQueue.length === 1) {
+          triggerRadarScan(radarQueue[0]);
+        } else {
+          triggerRadarBatchScan(radarQueue);
+        }
+      });
+    }
   }
 
   function switchToRadarTabAndScan(productQuery) {
@@ -1358,20 +1490,20 @@
     if (radarTab) radarTab.classList.add('active');
     if (radarSection) radarSection.classList.add('active');
 
-    const searchInput = document.getElementById('radarSearchInput');
-    if (searchInput) {
-      searchInput.value = productQuery;
-    }
+    radarQueue = [productQuery];
+    renderRadarQueue();
     triggerRadarScan(productQuery);
     window.scrollTo({ top: 150, behavior: 'smooth' });
   }
 
+  // Single Item Radar Scan
   async function triggerRadarScan(query) {
     if (!query) return;
     const spinner = document.getElementById('radarSpinner');
     const scanIcon = document.getElementById('radarScanIcon');
     const scanText = document.getElementById('radarScanBtnText');
-    const resultsArea = document.getElementById('radarResultsArea');
+    const singleArea = document.getElementById('radarResultsArea');
+    const multiArea = document.getElementById('radarMultiResultsArea');
     const placeholder = document.getElementById('radarPlaceholder');
     const errorBox = document.getElementById('radarErrorBox');
 
@@ -1380,6 +1512,7 @@
     if (scanText) scanText.textContent = 'Scanning G2G...';
 
     if (placeholder) placeholder.style.display = 'none';
+    if (multiArea) multiArea.style.display = 'none';
     if (errorBox) errorBox.style.display = 'none';
 
     try {
@@ -1387,13 +1520,13 @@
       const data = await res.json();
 
       if (!data.success || !data.top5 || data.top5.length === 0) {
-        if (resultsArea) resultsArea.style.display = 'none';
+        if (singleArea) singleArea.style.display = 'none';
         if (errorBox) {
           errorBox.style.display = 'block';
           const errTitle = document.getElementById('radarErrorTitle');
           const errMsg = document.getElementById('radarErrorMessage');
           if (errTitle) errTitle.textContent = `No Offers Found for "${query}"`;
-          if (errMsg) errMsg.textContent = data.error || 'G2G marketplace currently has 0 active listings for this query. Try a broader search term (e.g. "Wolfpack" or "Bobcat").';
+          if (errMsg) errMsg.textContent = data.error || 'G2G marketplace currently has 0 active listings for this query.';
         }
         return;
       }
@@ -1463,11 +1596,11 @@
         }).join('');
       }
 
-      if (resultsArea) resultsArea.style.display = 'block';
+      if (singleArea) singleArea.style.display = 'block';
       showToast(`Found 5 lowest competitor prices on G2G for "${query}"!`, 'success');
     } catch (err) {
       console.error('Radar scan error:', err);
-      if (resultsArea) resultsArea.style.display = 'none';
+      if (singleArea) singleArea.style.display = 'none';
       if (errorBox) {
         errorBox.style.display = 'block';
         const errTitle = document.getElementById('radarErrorTitle');
@@ -1478,7 +1611,166 @@
     } finally {
       if (spinner) spinner.style.display = 'none';
       if (scanIcon) scanIcon.style.display = 'inline-block';
-      if (scanText) scanText.textContent = 'Scan 5 Lowest Prices';
+      renderRadarQueue();
+    }
+  }
+
+  // Multi-Item Batch Radar Scan (Scan all chosen products simultaneously)
+  async function triggerRadarBatchScan(itemsList) {
+    if (!itemsList || itemsList.length === 0) return;
+
+    const spinner = document.getElementById('radarSpinner');
+    const scanIcon = document.getElementById('radarScanIcon');
+    const scanText = document.getElementById('radarScanBtnText');
+    const multiArea = document.getElementById('radarMultiResultsArea');
+    const singleArea = document.getElementById('radarResultsArea');
+    const placeholder = document.getElementById('radarPlaceholder');
+    const errorBox = document.getElementById('radarErrorBox');
+
+    if (spinner) spinner.style.display = 'inline-block';
+    if (scanIcon) scanIcon.style.display = 'none';
+    if (scanText) scanText.textContent = `Scanning ${itemsList.length} items on G2G...`;
+
+    if (placeholder) placeholder.style.display = 'none';
+    if (singleArea) singleArea.style.display = 'none';
+    if (errorBox) errorBox.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/g2g-prices/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: itemsList })
+      });
+      const data = await res.json();
+
+      if (!data.success || !data.results || data.results.length === 0) {
+        if (multiArea) multiArea.style.display = 'none';
+        if (errorBox) {
+          errorBox.style.display = 'block';
+          document.getElementById('radarErrorTitle').textContent = 'No Market Offers Found';
+          document.getElementById('radarErrorMessage').textContent = data.error || 'G2G returned 0 offers for the selected items.';
+        }
+        return;
+      }
+
+      // Compute Basket KPIs
+      const validResults = data.results.filter(r => r.lowestPrice > 0);
+      const totalBasketCost = validResults.reduce((acc, r) => acc + r.lowestPrice, 0);
+      const avgBasketPrice = validResults.length > 0 ? (totalBasketCost / validResults.length) : 0;
+      
+      let cheapestItem = validResults.length > 0 
+        ? validResults.reduce((prev, curr) => curr.lowestPrice < prev.lowestPrice ? curr : prev) 
+        : null;
+
+      document.getElementById('multiKpiCount').textContent = `${data.results.length} products`;
+      document.getElementById('multiKpiBasketCost').textContent = `$${totalBasketCost.toFixed(2)}`;
+      document.getElementById('multiKpiAvg').textContent = `$${avgBasketPrice.toFixed(2)}`;
+      if (cheapestItem) {
+        document.getElementById('multiKpiCheapest').textContent = cheapestItem.query;
+        document.getElementById('multiKpiCheapestPrice').textContent = `Lowest: ${cheapestItem.formattedLowestPrice}`;
+      } else {
+        document.getElementById('multiKpiCheapest').textContent = '—';
+        document.getElementById('multiKpiCheapestPrice').textContent = '$0.00';
+      }
+      document.getElementById('multiScanTimestamp').textContent = `Checked at ${new Date().toLocaleTimeString()} • ${data.results.length} items`;
+
+      // Render Comparison Table Body
+      const tbody = document.getElementById('radarMultiTableBody');
+      if (tbody) {
+        tbody.innerHTML = data.results.map((r, rowIdx) => {
+          const cheapestSeller = r.top5 && r.top5.length > 0 ? r.top5[0] : null;
+          const detailsId = `radar_details_${rowIdx}`;
+
+          const top5CardsHtml = (r.top5 || []).map((offer, idx) => {
+            const isLowest = idx === 0;
+            return `
+              <div class="radar-offer-card ${isLowest ? 'rank-1' : ''}" style="margin: 0;">
+                <div class="radar-card-header">
+                  <span class="rank-badge ${isLowest ? 'rank-1' : 'rank-default'}">
+                    ${isLowest ? '🏆 #1 Lowest' : `#${offer.rank}`}
+                  </span>
+                  <span class="radar-price-tag">${escapeHtml(offer.formattedPrice)}</span>
+                </div>
+                <div class="radar-offer-title" style="min-height: auto; margin-bottom: 8px;">
+                  ${escapeHtml(offer.title)}
+                </div>
+                <div class="radar-seller-info" style="margin-bottom: 8px;">
+                  <span class="radar-seller-name">👤 ${escapeHtml(offer.sellerName)}</span>
+                  <span class="radar-seller-stat">★ ${escapeHtml(offer.sellerRating)} (${offer.sellerOrders})</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto;">
+                  <span style="font-size: 11px; color: var(--text-dim);">Stock: <strong style="color: #fff;">${Number(offer.availableQty).toLocaleString()}</strong></span>
+                  <a href="${escapeHtml(offer.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-cyan btn-sm" style="font-size: 10px; padding: 3px 8px;">View G2G ↗</a>
+                </div>
+              </div>
+            `;
+          }).join('');
+
+          return `
+            <tr>
+              <td>
+                <strong style="color: #fff; font-size: 14px;">${escapeHtml(r.query)}</strong>
+                <div style="font-size: 11px; color: var(--text-dim);">${r.totalFound} active offers</div>
+              </td>
+              <td>
+                <strong style="font-size: 16px; color: var(--accent-green); font-family: Outfit, sans-serif;">
+                  ${r.formattedLowestPrice}
+                </strong>
+              </td>
+              <td style="color: var(--accent-cyan); font-weight: 600;">
+                ${r.formattedAveragePrice}
+              </td>
+              <td style="color: var(--accent-gold); font-weight: 700;">
+                ${r.formattedRecommendedPrice}
+              </td>
+              <td>
+                ${cheapestSeller ? `
+                  <div style="font-weight: 600; color: #fff;">${escapeHtml(cheapestSeller.sellerName)}</div>
+                  <div style="font-size: 11px; color: var(--text-dim);">★ ${escapeHtml(cheapestSeller.sellerRating)} • ${Number(cheapestSeller.sellerOrders).toLocaleString()} orders</div>
+                ` : '<span style="color: var(--text-dim);">—</span>'}
+              </td>
+              <td>
+                <span class="rank-badge rank-default">${r.totalFound} offers</span>
+              </td>
+              <td>
+                <button type="button" class="btn btn-outline-cyan btn-sm" data-toggle-details="${detailsId}" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;">
+                  Top 5 Sellers ▾
+                </button>
+              </td>
+            </tr>
+            <tr id="${detailsId}" style="display: none; background: rgba(0,0,0,0.4);">
+              <td colspan="7" style="padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                  <span style="font-size: 12px; font-weight: 700; color: var(--accent-cyan);">
+                    🏆 5 Lowest Sellers for "${escapeHtml(r.query)}"
+                  </span>
+                  <a href="https://www.g2g.com/categories/arc-raiders-items?q=${encodeURIComponent(r.query)}" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: var(--accent-cyan);">
+                    Search on G2G.com ↗
+                  </a>
+                </div>
+                <div class="radar-offers-grid" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;">
+                  ${top5CardsHtml || '<div style="color: var(--text-dim);">No offers found</div>'}
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      if (multiArea) multiArea.style.display = 'block';
+      showToast(`Scanned ${data.results.length} products! Comparison table ready below.`, 'success');
+    } catch (err) {
+      console.error('Batch scan error:', err);
+      if (multiArea) multiArea.style.display = 'none';
+      if (errorBox) {
+        errorBox.style.display = 'block';
+        document.getElementById('radarErrorTitle').textContent = 'Network or API Error';
+        document.getElementById('radarErrorMessage').textContent = 'Failed to fetch batch prices from G2G. Please try again.';
+      }
+    } finally {
+      if (spinner) spinner.style.display = 'none';
+      if (scanIcon) scanIcon.style.display = 'inline-block';
+      renderRadarQueue();
     }
   }
 

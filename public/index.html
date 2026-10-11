@@ -295,8 +295,8 @@
     <section id="topicRadarSection" class="topic-content">
       <div class="topic-header-bar">
         <div>
-          <h2>🎯 G2G Live Market Price Radar</h2>
-          <p class="section-desc">Select any product to query the live G2G marketplace and inspect the 5 lowest active seller prices, ratings, and undercut recommendations.</p>
+          <h2>🎯 G2G Live Market Price Radar (Multi-Item Scanner)</h2>
+          <p class="section-desc">Choose one or multiple items simultaneously to scan live G2G marketplace prices, view the 5 lowest seller prices, and compare competitor pricing side-by-side.</p>
         </div>
         <div style="display: flex; gap: 8px;">
           <a href="https://www.g2g.com/categories/arc-raiders-items" target="_blank" rel="noopener noreferrer" class="btn btn-outline-cyan btn-sm">
@@ -309,7 +309,7 @@
       <div class="radar-controls-card">
         <div class="form-row" style="margin-bottom: 12px;">
           <div class="form-group" style="flex: 1;">
-            <label>1. Pick Catalog Category</label>
+            <label>1. Filter by Category</label>
             <select id="radarCategorySelect" class="form-control">
               <option value="">All Categories (Weapons, Blueprints, Keys...)</option>
               <option value="Weapons">Weapons</option>
@@ -325,48 +325,136 @@
             </select>
           </div>
           <div class="form-group" style="flex: 1.5;">
-            <label>2. Pick ARC Raiders Product Preset</label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label style="margin: 0;">2. Pick ARC Raiders Product Preset</label>
+              <button type="button" id="btnAddAllCategory" class="btn btn-outline-cyan btn-sm" style="padding: 1px 7px; font-size: 10px;">
+                + Add All In Category
+              </button>
+            </div>
             <select id="radarProductPreset" class="form-control" style="color: var(--accent-cyan); font-weight: 600;">
-              <option value="">-- Choose preset or type below --</option>
+              <option value="">-- Choose preset to add to queue --</option>
             </select>
           </div>
         </div>
 
         <div class="form-row" style="align-items: flex-end;">
           <div class="form-group" style="flex: 2; margin-bottom: 0;">
-            <label>3. Product Search Query (Exact or partial name)</label>
+            <label>3. Search & Add Custom Product (or multiple comma-separated)</label>
             <div style="position: relative;">
-              <input type="text" id="radarSearchInput" class="form-control" placeholder="e.g. Bobcat IV, Wolfpack, Stella Montis Key, Resin..." style="padding-left: 36px; font-size: 15px; font-weight: 600;">
+              <input type="text" id="radarSearchInput" class="form-control" placeholder="Type item name e.g. Bobcat IV, Wolfpack... (press Enter to add)" style="padding-left: 36px; font-size: 15px; font-weight: 600;">
               <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-dim);">🔍</span>
             </div>
           </div>
-          <div style="flex: 1; display: flex; gap: 8px;">
-            <button id="btnScanG2GPrices" class="btn btn-primary" style="flex: 1; height: 42px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <div style="display: flex; gap: 8px;">
+            <button id="btnAddItemToQueue" type="button" class="btn btn-secondary" style="height: 42px; padding: 0 16px;" title="Add product to scan list">
+              <span>➕</span> Add Item
+            </button>
+            <button id="btnScanG2GPrices" class="btn btn-primary" style="height: 42px; min-width: 220px; display: flex; align-items: center; justify-content: center; gap: 8px;">
               <span id="radarSpinner" style="display: none;" class="spin-icon">⏳</span>
               <span id="radarScanIcon">⚡</span>
-              <span id="radarScanBtnText">Scan 5 Lowest Prices</span>
+              <span id="radarScanBtnText">Scan Lowest Prices</span>
             </button>
-            <button id="btnClearRadar" class="btn btn-secondary" style="height: 42px;" title="Reset Search">
-              ✕
+          </div>
+        </div>
+
+        <!-- Selected Products Queue Tray -->
+        <div id="radarSelectedTray" class="radar-selected-tray">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 12px; font-weight: 700; color: var(--accent-cyan); display: flex; align-items: center; gap: 6px;">
+              <span>📦</span> Selected Products to Check (<strong id="radarQueueCount">0</strong>):
+            </span>
+            <button type="button" id="btnClearQueue" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 11px;">
+              Clear All
             </button>
+          </div>
+          <div id="radarChipsContainer" class="radar-chips-container">
+            <span id="radarEmptyQueueNotice" style="font-size: 12px; color: var(--text-dim); font-style: italic;">
+              No products selected yet. Pick items from above or click popular buttons below to compare multiple items at once.
+            </span>
           </div>
         </div>
 
         <!-- Quick Tag Suggestions -->
         <div class="radar-quick-tags" style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-          <span style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; margin-right: 4px;">Popular:</span>
-          <button class="radar-tag-btn" data-query="Bobcat IV">Bobcat IV</button>
-          <button class="radar-tag-btn" data-query="Wolfpack">Wolfpack</button>
-          <button class="radar-tag-btn" data-query="Tempest">Tempest</button>
-          <button class="radar-tag-btn" data-query="Stella Montis Archives Key">Stella Montis Key</button>
-          <button class="radar-tag-btn" data-query="Dolabra">Dolabra</button>
-          <button class="radar-tag-btn" data-query="Vulcano">Vulcano</button>
-          <button class="radar-tag-btn" data-query="Combat Mk. 3">Combat Mk. 3</button>
-          <button class="radar-tag-btn" data-query="Resin">Resin</button>
+          <span style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; margin-right: 4px;">Quick Add:</span>
+          <button class="radar-tag-btn" data-query="Bobcat IV">+ Bobcat IV</button>
+          <button class="radar-tag-btn" data-query="Wolfpack">+ Wolfpack</button>
+          <button class="radar-tag-btn" data-query="Tempest IV">+ Tempest IV</button>
+          <button class="radar-tag-btn" data-query="Stella Montis Archives Key">+ Stella Montis Key</button>
+          <button class="radar-tag-btn" data-query="Dolabra">+ Dolabra</button>
+          <button class="radar-tag-btn" data-query="Vulcano">+ Vulcano</button>
+          <button class="radar-tag-btn" data-query="Combat Mk. 3 (Aggressive)">+ Combat Mk. 3</button>
+          <button class="radar-tag-btn" data-query="Resin">+ Resin</button>
+          <button class="radar-tag-btn" data-query="ARC Motion Core">+ ARC Motion Core</button>
         </div>
       </div>
 
-      <!-- Radar Results Container -->
+      <!-- Radar Multi-Item Comparison Results -->
+      <div id="radarMultiResultsArea" style="margin-top: 24px; display: none;">
+        <!-- Basket KPI row -->
+        <div class="radar-kpi-row" style="margin-bottom: 20px;">
+          <div class="radar-kpi-card highlight-cyan">
+            <div class="kpi-icon">📦</div>
+            <div>
+              <div class="radar-kpi-label">Items Scanned</div>
+              <div class="radar-kpi-value" id="multiKpiCount">0</div>
+              <div class="radar-kpi-sub">Total products queried</div>
+            </div>
+          </div>
+          <div class="radar-kpi-card highlight-green">
+            <div class="kpi-icon">💰</div>
+            <div>
+              <div class="radar-kpi-label">Total Market Basket Cost</div>
+              <div class="radar-kpi-value" id="multiKpiBasketCost">$0.00</div>
+              <div class="radar-kpi-sub">Combined lowest prices</div>
+            </div>
+          </div>
+          <div class="radar-kpi-card highlight-gold">
+            <div class="kpi-icon">📊</div>
+            <div>
+              <div class="radar-kpi-label">Average Item Price</div>
+              <div class="radar-kpi-value" id="multiKpiAvg">$0.00</div>
+              <div class="radar-kpi-sub">Across all scanned items</div>
+            </div>
+          </div>
+          <div class="radar-kpi-card">
+            <div class="kpi-icon">🏆</div>
+            <div>
+              <div class="radar-kpi-label">Cheapest Item</div>
+              <div class="radar-kpi-value" id="multiKpiCheapest" style="font-size: 16px;">—</div>
+              <div class="radar-kpi-sub" id="multiKpiCheapestPrice">$0.00</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Comparison Table -->
+        <div class="radar-multi-table-wrap">
+          <div style="padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="font-size: 15px; color: #fff; display: flex; align-items: center; gap: 8px;">
+              <span>📊</span> Live Price Comparison of All Selected Items
+            </h3>
+            <span style="font-size: 12px; color: var(--text-dim);" id="multiScanTimestamp">Live G2G Data</span>
+          </div>
+          <table class="radar-multi-table">
+            <thead>
+              <tr>
+                <th>Product Name</th>
+                <th>#1 Lowest Price</th>
+                <th>Top 5 Average</th>
+                <th>Recommended Undercut</th>
+                <th>Cheapest Seller</th>
+                <th>Listings</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="radarMultiTableBody">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Radar Single Item Results Container -->
       <div id="radarResultsArea" style="margin-top: 24px; display: none;">
         <!-- KPI summary banner -->
         <div class="radar-kpi-row">
@@ -425,9 +513,9 @@
       <!-- Radar Initial / Empty State -->
       <div id="radarPlaceholder" class="empty-state-box" style="margin-top: 24px; padding: 40px 20px;">
         <div style="font-size: 42px; margin-bottom: 12px;">🎯</div>
-        <h4 style="font-size: 18px; color: #fff; margin-bottom: 6px;">Check Competitor Prices on G2G</h4>
+        <h4 style="font-size: 18px; color: #fff; margin-bottom: 6px;">Compare Competitor Prices on G2G</h4>
         <p style="color: var(--text-dim); max-width: 500px; margin: 0 auto 16px;">
-          Select any weapon, blueprint, key, or material from the presets above or type a name, then click <strong>"Scan 5 Lowest Prices"</strong> to view real-time market data.
+          Select one or multiple items to compare live prices, find the cheapest deals on G2G, and inspect competitor ratings.
         </p>
       </div>
 
@@ -435,7 +523,7 @@
       <div id="radarErrorBox" class="empty-state-box" style="display: none; margin-top: 24px; border-color: rgba(255, 51, 102, 0.4); background: rgba(255, 51, 102, 0.05);">
         <div style="font-size: 36px; margin-bottom: 8px;">⚠️</div>
         <h4 id="radarErrorTitle" style="color: var(--accent-red); margin-bottom: 4px;">No Offers Found</h4>
-        <p id="radarErrorMessage" style="color: var(--text-dim); font-size: 13px;">G2G returned 0 offers for this query. Try a broader search term (e.g. "Wolfpack" instead of "Wolfpack Mk3").</p>
+        <p id="radarErrorMessage" style="color: var(--text-dim); font-size: 13px;">G2G returned 0 offers for this query.</p>
       </div>
     </section>
 
