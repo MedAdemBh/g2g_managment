@@ -233,7 +233,7 @@ async function fetchG2GLowestOffer(query, forceFresh = false) {
         offerId: r.offer_id,
         url: `https://www.g2g.com/offer/${r.offer_id}`
       };
-    }).filter((o) => o.price > 0).sort((a, b) => a.price - b.price);
+    }).filter((o) => o.price >= 0.01).sort((a, b) => a.price - b.price);
 
     const top5 = offers.slice(0, 5).map((o, idx) => ({ rank: idx + 1, ...o }));
     const lowestPrice = top5.length ? top5[0].price : 0;
