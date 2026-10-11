@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import cors from 'cors';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
@@ -17,12 +18,17 @@ const wss = new WebSocketServer({ server });
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'store.json');
 
+app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+} catch (e) {
+  // Read-only filesystem in serverless environments
 }
 
 // Initial demo seed data
@@ -609,9 +615,10 @@ wss.on('connection', async (ws) => {
   });
 });
 
-// Run server when started locally
+// Run server when started directly
 const PORT = process.env.PORT || 3000;
-if (!process.env.VERCEL) {
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename);
+if (!process.env.VERCEL && isMain) {
   server.listen(PORT, () => {
     console.log(`🚀 G2G Management Server running at http://localhost:${PORT}`);
     console.log(`⚡ WebSocket Server ready for real-time seller multi-client sync`);
