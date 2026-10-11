@@ -191,15 +191,15 @@ app.get('/api/catalog', (req, res) => {
 
 // G2G Live Market Price Checker (Top 5 Lowest Prices for ARC Raiders)
 const g2gPriceCache = new Map();
-const CACHE_TTL_MS = 60 * 1000;
+const CACHE_TTL_MS = 20 * 1000; // 20-second cache ensures every 30s auto-refresh pulls fresh market prices
 
-async function fetchG2GLowestOffer(query) {
+async function fetchG2GLowestOffer(query, forceFresh = false) {
   const trimmed = (query || '').trim();
   if (!trimmed) return null;
 
   const cacheKey = trimmed.toLowerCase();
   const cached = g2gPriceCache.get(cacheKey);
-  if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+  if (!forceFresh && cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
     return { ...cached.data, fromCache: true };
   }
 
@@ -277,11 +277,12 @@ async function fetchG2GLowestOffer(query) {
 // Single item price check
 app.get('/api/g2g-prices', async (req, res) => {
   const query = (req.query.query || req.query.q || '').trim();
+  const forceFresh = req.query.fresh === 'true' || req.query.forceFresh === 'true';
   if (!query) {
     return res.status(400).json({ success: false, error: 'Query parameter is required' });
   }
 
-  const result = await fetchG2GLowestOffer(query);
+  const result = await fetchG2GLowestOffer(query, forceFresh);
   if (result.error && (!result.top5 || result.top5.length === 0)) {
     return res.status(500).json({ success: false, ...result });
   }
@@ -292,12 +293,13 @@ app.get('/api/g2g-prices', async (req, res) => {
 app.post('/api/g2g-prices/batch', async (req, res) => {
   const items = Array.isArray(req.body.items) ? req.body.items : (Array.isArray(req.body.queries) ? req.body.queries : []);
   const cleanItems = items.map((it) => (typeof it === 'string' ? it.trim() : '')).filter(Boolean).slice(0, 30);
+  const forceFresh = req.body.fresh === true || req.body.forceFresh === true;
 
   if (cleanItems.length === 0) {
     return res.status(400).json({ success: false, error: 'Provide at least one item name in the items array.' });
   }
 
-  const results = await Promise.all(cleanItems.map((query) => fetchG2GLowestOffer(query)));
+  const results = await Promise.all(cleanItems.map((query) => fetchG2GLowestOffer(query, forceFresh)));
   return res.json({ success: true, count: results.length, results });
 });
 

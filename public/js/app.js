@@ -1286,8 +1286,71 @@
     setupRadarEvents();
   }
 
-  // Multi-Item Radar Queue State
+  // Multi-Item Radar Queue & 30s Auto-Refresh State
   let radarQueue = [];
+  let radarLastScannedItems = [];
+  let radarAutoRefreshEnabled = true;
+  let radarAutoRefreshCountdown = 30;
+  let radarAutoRefreshTimer = null;
+  let radarIsScanning = false;
+
+  function updateRadarAutoRefreshUI() {
+    const badge = document.getElementById('radarAutoRefreshBadge');
+    const dot = document.getElementById('radarPulseDot');
+    const toggleBtn = document.getElementById('btnToggleAutoRefresh');
+    const countText = document.getElementById('radarCountdownText');
+
+    if (badge) {
+      badge.textContent = radarAutoRefreshEnabled ? 'ACTIVE' : 'PAUSED';
+      badge.className = `radar-live-badge ${radarAutoRefreshEnabled ? 'active' : 'paused'}`;
+    }
+    if (dot) {
+      dot.className = `radar-pulse-dot ${radarAutoRefreshEnabled ? '' : 'paused'}`;
+    }
+    if (toggleBtn) {
+      toggleBtn.textContent = radarAutoRefreshEnabled ? 'Pause' : 'Resume';
+      toggleBtn.className = `btn ${radarAutoRefreshEnabled ? 'btn-secondary' : 'btn-outline-cyan'} btn-sm`;
+    }
+    if (countText) {
+      if (!radarAutoRefreshEnabled) {
+        countText.textContent = 'Auto-sync paused';
+      } else {
+        countText.textContent = `Refreshing in ${radarAutoRefreshCountdown}s`;
+      }
+    }
+  }
+
+  function startRadarAutoRefreshTimer() {
+    if (radarAutoRefreshTimer) clearInterval(radarAutoRefreshTimer);
+
+    radarAutoRefreshTimer = setInterval(() => {
+      if (!radarAutoRefreshEnabled) return;
+
+      const itemsToScan = radarQueue.length > 0 ? radarQueue : radarLastScannedItems;
+      if (itemsToScan.length === 0) {
+        const countText = document.getElementById('radarCountdownText');
+        if (countText) countText.textContent = 'Add items to scan';
+        return;
+      }
+
+      radarAutoRefreshCountdown--;
+      const countText = document.getElementById('radarCountdownText');
+      if (countText) {
+        countText.textContent = `Refreshing in ${radarAutoRefreshCountdown}s`;
+      }
+
+      if (radarAutoRefreshCountdown <= 0) {
+        radarAutoRefreshCountdown = 30;
+        if (!radarIsScanning) {
+          if (itemsToScan.length === 1) {
+            triggerRadarScan(itemsToScan[0], true);
+          } else {
+            triggerRadarBatchScan(itemsToScan, true);
+          }
+        }
+      }
+    }, 1000);
+  }
 
   function addRadarQueueItem(itemName) {
     if (!itemName) return;
@@ -1364,6 +1427,20 @@
     const scanBtn = document.getElementById('btnScanG2GPrices');
     const chipsContainer = document.getElementById('radarChipsContainer');
     const multiTableBody = document.getElementById('radarMultiTableBody');
+    const toggleAutoRefreshBtn = document.getElementById('btnToggleAutoRefresh');
+
+    if (toggleAutoRefreshBtn) {
+      toggleAutoRefreshBtn.addEventListener('click', () => {
+        radarAutoRefreshEnabled = !radarAutoRefreshEnabled;
+        if (radarAutoRefreshEnabled) {
+          radarAutoRefreshCountdown = 30;
+          showToast('Live 30s auto-refresh resumed!', 'info');
+        } else {
+          showToast('Live auto-refresh paused.', 'info');
+        }
+        updateRadarAutoRefreshUI();
+      });
+    }
 
     if (categorySelect) {
       categorySelect.addEventListener('change', populateRadarPresets);
@@ -1474,9 +1551,9 @@
         }
 
         if (radarQueue.length === 1) {
-          triggerRadarScan(radarQueue[0]);
+          triggerRadarScan(radarQueue[0], false);
         } else {
-          triggerRadarBatchScan(radarQueue);
+          triggerRadarBatchScan(radarQueue, false);
         }
       });
     }
@@ -1492,13 +1569,17 @@
 
     radarQueue = [productQuery];
     renderRadarQueue();
-    triggerRadarScan(productQuery);
+    triggerRadarScan(productQuery, false);
     window.scrollTo({ top: 150, behavior: 'smooth' });
   }
 
   // Single Item Radar Scan
-  async function triggerRadarScan(query) {
+  async function triggerRadarScan(query, isAutoRefresh = false) {
     if (!query) return;
+    radarIsScanning = true;
+    radarAutoRefreshCountdown = 30;
+    radarLastScannedItems = [query];
+
     const spinner = document.getElementById('radarSpinner');
     const scanIcon = document.getElementById('radarScanIcon');
     const scanText = document.getElementById('radarScanBtnText');
@@ -1507,26 +1588,30 @@
     const placeholder = document.getElementById('radarPlaceholder');
     const errorBox = document.getElementById('radarErrorBox');
 
-    if (spinner) spinner.style.display = 'inline-block';
-    if (scanIcon) scanIcon.style.display = 'none';
-    if (scanText) scanText.textContent = 'Scanning G2G...';
+    if (!isAutoRefresh) {
+      if (spinner) spinner.style.display = 'inline-block';
+      if (scanIcon) scanIcon.style.display = 'none';
+      if (scanText) scanText.textContent = 'Scanning G2G...';
 
-    if (placeholder) placeholder.style.display = 'none';
-    if (multiArea) multiArea.style.display = 'none';
-    if (errorBox) errorBox.style.display = 'none';
+      if (placeholder) placeholder.style.display = 'none';
+      if (multiArea) multiArea.style.display = 'none';
+      if (errorBox) errorBox.style.display = 'none';
+    }
 
     try {
-      const res = await fetch(`/api/g2g-prices?query=${encodeURIComponent(query)}`);
+      const res = await fetch(`/api/g2g-prices?query=${encodeURIComponent(query)}&forceFresh=true`);
       const data = await res.json();
 
       if (!data.success || !data.top5 || data.top5.length === 0) {
-        if (singleArea) singleArea.style.display = 'none';
-        if (errorBox) {
-          errorBox.style.display = 'block';
-          const errTitle = document.getElementById('radarErrorTitle');
-          const errMsg = document.getElementById('radarErrorMessage');
-          if (errTitle) errTitle.textContent = `No Offers Found for "${query}"`;
-          if (errMsg) errMsg.textContent = data.error || 'G2G marketplace currently has 0 active listings for this query.';
+        if (!isAutoRefresh) {
+          if (singleArea) singleArea.style.display = 'none';
+          if (errorBox) {
+            errorBox.style.display = 'block';
+            const errTitle = document.getElementById('radarErrorTitle');
+            const errMsg = document.getElementById('radarErrorMessage');
+            if (errTitle) errTitle.textContent = `No Offers Found for "${query}"`;
+            if (errMsg) errMsg.textContent = data.error || 'G2G marketplace currently has 0 active listings for this query.';
+          }
         }
         return;
       }
@@ -1544,7 +1629,7 @@
       if (kpiRec) kpiRec.textContent = data.formattedRecommendedPrice;
       if (kpiTotal) kpiTotal.textContent = `${data.totalFound} offers`;
       if (kpiProduct) kpiProduct.textContent = `"${data.query}"`;
-      if (kpiTime) kpiTime.textContent = `Checked at ${new Date().toLocaleTimeString()}`;
+      if (kpiTime) kpiTime.textContent = `Checked at ${new Date().toLocaleTimeString()} (auto-synced 30s)`;
 
       // Render 5 Lowest Cards
       const grid = document.getElementById('radarTop5Grid');
@@ -1597,18 +1682,23 @@
       }
 
       if (singleArea) singleArea.style.display = 'block';
-      showToast(`Found 5 lowest competitor prices on G2G for "${query}"!`, 'success');
+      if (!isAutoRefresh) {
+        showToast(`Found 5 lowest competitor prices on G2G for "${query}"!`, 'success');
+      }
     } catch (err) {
       console.error('Radar scan error:', err);
-      if (singleArea) singleArea.style.display = 'none';
-      if (errorBox) {
-        errorBox.style.display = 'block';
-        const errTitle = document.getElementById('radarErrorTitle');
-        const errMsg = document.getElementById('radarErrorMessage');
-        if (errTitle) errTitle.textContent = 'Network or API Error';
-        if (errMsg) errMsg.textContent = 'Could not reach G2G API. Please check your connection and try again.';
+      if (!isAutoRefresh) {
+        if (singleArea) singleArea.style.display = 'none';
+        if (errorBox) {
+          errorBox.style.display = 'block';
+          const errTitle = document.getElementById('radarErrorTitle');
+          const errMsg = document.getElementById('radarErrorMessage');
+          if (errTitle) errTitle.textContent = 'Network or API Error';
+          if (errMsg) errMsg.textContent = 'Could not reach G2G API. Please check your connection and try again.';
+        }
       }
     } finally {
+      radarIsScanning = false;
       if (spinner) spinner.style.display = 'none';
       if (scanIcon) scanIcon.style.display = 'inline-block';
       renderRadarQueue();
@@ -1616,8 +1706,11 @@
   }
 
   // Multi-Item Batch Radar Scan (Scan all chosen products simultaneously)
-  async function triggerRadarBatchScan(itemsList) {
+  async function triggerRadarBatchScan(itemsList, isAutoRefresh = false) {
     if (!itemsList || itemsList.length === 0) return;
+    radarIsScanning = true;
+    radarAutoRefreshCountdown = 30;
+    radarLastScannedItems = [...itemsList];
 
     const spinner = document.getElementById('radarSpinner');
     const scanIcon = document.getElementById('radarScanIcon');
@@ -1627,28 +1720,32 @@
     const placeholder = document.getElementById('radarPlaceholder');
     const errorBox = document.getElementById('radarErrorBox');
 
-    if (spinner) spinner.style.display = 'inline-block';
-    if (scanIcon) scanIcon.style.display = 'none';
-    if (scanText) scanText.textContent = `Scanning ${itemsList.length} items on G2G...`;
+    if (!isAutoRefresh) {
+      if (spinner) spinner.style.display = 'inline-block';
+      if (scanIcon) scanIcon.style.display = 'none';
+      if (scanText) scanText.textContent = `Scanning ${itemsList.length} items on G2G...`;
 
-    if (placeholder) placeholder.style.display = 'none';
-    if (singleArea) singleArea.style.display = 'none';
-    if (errorBox) errorBox.style.display = 'none';
+      if (placeholder) placeholder.style.display = 'none';
+      if (singleArea) singleArea.style.display = 'none';
+      if (errorBox) errorBox.style.display = 'none';
+    }
 
     try {
       const res = await fetch('/api/g2g-prices/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: itemsList })
+        body: JSON.stringify({ items: itemsList, forceFresh: true })
       });
       const data = await res.json();
 
       if (!data.success || !data.results || data.results.length === 0) {
-        if (multiArea) multiArea.style.display = 'none';
-        if (errorBox) {
-          errorBox.style.display = 'block';
-          document.getElementById('radarErrorTitle').textContent = 'No Market Offers Found';
-          document.getElementById('radarErrorMessage').textContent = data.error || 'G2G returned 0 offers for the selected items.';
+        if (!isAutoRefresh) {
+          if (multiArea) multiArea.style.display = 'none';
+          if (errorBox) {
+            errorBox.style.display = 'block';
+            document.getElementById('radarErrorTitle').textContent = 'No Market Offers Found';
+            document.getElementById('radarErrorMessage').textContent = data.error || 'G2G returned 0 offers for the selected items.';
+          }
         }
         return;
       }
@@ -1672,7 +1769,7 @@
         document.getElementById('multiKpiCheapest').textContent = '—';
         document.getElementById('multiKpiCheapestPrice').textContent = '$0.00';
       }
-      document.getElementById('multiScanTimestamp').textContent = `Checked at ${new Date().toLocaleTimeString()} • ${data.results.length} items`;
+      document.getElementById('multiScanTimestamp').textContent = `Checked at ${new Date().toLocaleTimeString()} (auto-synced 30s) • ${data.results.length} items`;
 
       // Render Comparison Table Body
       const tbody = document.getElementById('radarMultiTableBody');
@@ -1758,16 +1855,21 @@
       }
 
       if (multiArea) multiArea.style.display = 'block';
-      showToast(`Scanned ${data.results.length} products! Comparison table ready below.`, 'success');
+      if (!isAutoRefresh) {
+        showToast(`Scanned ${data.results.length} products! Comparison table ready below.`, 'success');
+      }
     } catch (err) {
       console.error('Batch scan error:', err);
-      if (multiArea) multiArea.style.display = 'none';
-      if (errorBox) {
-        errorBox.style.display = 'block';
-        document.getElementById('radarErrorTitle').textContent = 'Network or API Error';
-        document.getElementById('radarErrorMessage').textContent = 'Failed to fetch batch prices from G2G. Please try again.';
+      if (!isAutoRefresh) {
+        if (multiArea) multiArea.style.display = 'none';
+        if (errorBox) {
+          errorBox.style.display = 'block';
+          document.getElementById('radarErrorTitle').textContent = 'Network or API Error';
+          document.getElementById('radarErrorMessage').textContent = 'Failed to fetch batch prices from G2G. Please try again.';
+        }
       }
     } finally {
+      radarIsScanning = false;
       if (spinner) spinner.style.display = 'none';
       if (scanIcon) scanIcon.style.display = 'inline-block';
       renderRadarQueue();
@@ -1782,6 +1884,8 @@
   // Boot
   async function boot() {
     setupEvents();
+    startRadarAutoRefreshTimer();
+    updateRadarAutoRefreshUI();
     await fetchCatalog();
     await fetchState();
     initWebSocket();
@@ -1793,3 +1897,4 @@
     boot();
   }
 })();
+

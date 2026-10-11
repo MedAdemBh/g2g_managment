@@ -298,7 +298,22 @@
           <h2>🎯 G2G Live Market Price Radar (Multi-Item Scanner)</h2>
           <p class="section-desc">Choose one or multiple items simultaneously to scan live G2G marketplace prices, view the 5 lowest seller prices, and compare competitor pricing side-by-side.</p>
         </div>
-        <div style="display: flex; gap: 8px;">
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <!-- 30-Second Auto-Refresh Widget -->
+          <div class="radar-autorefresh-box" id="radarAutoRefreshBox" title="Toggle automatic price updates every 30 seconds">
+            <div class="radar-pulse-dot" id="radarPulseDot"></div>
+            <div class="radar-autorefresh-info">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="radar-autorefresh-title">Live 30s Auto-Sync</span>
+                <span id="radarAutoRefreshBadge" class="radar-live-badge active">ACTIVE</span>
+              </div>
+              <div id="radarCountdownText" class="radar-countdown-text">Next scan in 30s</div>
+            </div>
+            <button type="button" id="btnToggleAutoRefresh" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px; white-space: nowrap;">
+              Pause
+            </button>
+          </div>
+
           <a href="https://www.g2g.com/categories/arc-raiders-items" target="_blank" rel="noopener noreferrer" class="btn btn-outline-cyan btn-sm">
             <span>🌐</span> Open G2G ARC Raiders ↗
           </a>
