@@ -38,7 +38,6 @@ const getInitialSeedData = () => {
       {
         id: 'usr_seller_adem',
         name: 'Adem (Seller 1)',
-        email: 'adem.seller@g2g.com',
         role: 'seller',
         g2gStoreName: 'AdemVault_G2G',
         commissionRate: 10,
@@ -48,7 +47,6 @@ const getInitialSeedData = () => {
       {
         id: 'usr_seller_amine',
         name: 'Amine (Seller 2)',
-        email: 'amine.seller@g2g.com',
         role: 'seller',
         g2gStoreName: 'AmineMarket_G2G',
         commissionRate: 10,
@@ -58,7 +56,6 @@ const getInitialSeedData = () => {
       {
         id: 'usr_supplier_aymen',
         name: 'Aymen (User / Supplier)',
-        email: 'aymen.user@mail.com',
         role: 'supplier',
         g2gStoreName: '',
         commissionRate: 0,
@@ -68,7 +65,6 @@ const getInitialSeedData = () => {
       {
         id: 'usr_supplier_hmayma',
         name: 'Hmayma (User / Supplier)',
-        email: 'hmayma.user@mail.com',
         role: 'supplier',
         g2gStoreName: '',
         commissionRate: 0,
@@ -78,7 +74,6 @@ const getInitialSeedData = () => {
       {
         id: 'usr_admin',
         name: 'Admin (Manager)',
-        email: 'admin@g2ghub.com',
         role: 'admin',
         g2gStoreName: 'Main Store Operations',
         commissionRate: 0,
@@ -131,7 +126,7 @@ async function getFullState() {
   if (process.env.MONGODB_URI) {
     await connectDB();
     const [users, items, withdrawals, activityLogs] = await Promise.all([
-      User.find({}, '-_id -__v').lean(),
+      User.find({}, '-_id -__v -email').lean(),
       Item.find({}, '-_id -__v').sort({ createdAt: -1 }).lean(),
       Withdrawal.find({}, '-_id -__v').sort({ createdAt: -1 }).lean(),
       ActivityLog.find({}, '-_id -__v').sort({ timestamp: -1 }).limit(50).lean()
@@ -454,7 +449,7 @@ app.post('/api/items/:id/claim', async (req, res) => {
   res.json({ success: true, item });
 });
 
-// 5. Seller releases lock (Closing PC / Going offline)
+// 5. Seller releases lock (Leave for another seller)
 app.post('/api/items/:id/release', async (req, res) => {
   const { id } = req.params;
   const { reason } = req.body;
@@ -483,7 +478,7 @@ app.post('/api/items/:id/release', async (req, res) => {
     saveData(store);
   }
 
-  const releaseMsg = reason || 'Seller closed PC / went offline';
+  const releaseMsg = reason || 'Left for another seller';
   await logActivity('UNLOCKED', sellerName, `🔓 "${item.title}" was unlocked by ${sellerName} (${releaseMsg}). Now available!`);
   await broadcastUpdate('UNLOCKED', `"${item.title}" was unlocked by ${sellerName} (${releaseMsg}). Available now!`, sellerName);
   res.json({ success: true, item });
@@ -601,7 +596,7 @@ app.post('/api/withdraw', async (req, res) => {
   };
 
   if (process.env.MONGODB_URI) {
-    await user.save();
+    await User.updateOne({ id: user.id }, { $set: { balance: user.balance } });
     await Withdrawal.create(withdrawalRecord);
   } else {
     if (!store.withdrawals) store.withdrawals = [];

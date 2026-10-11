@@ -486,7 +486,7 @@
             <div>
               <strong>TAKEN BY ${escapeHtml(item.lockedBySellerName).toUpperCase()}!</strong><br>
               Currently selling on G2G. <strong>DO NOT SELL.</strong><br>
-              <span style="font-size: 11px; opacity: 0.85;">If ${escapeHtml(item.lockedBySellerName)} closes their PC and unlocks it, it will become available for you.</span>
+              <span style="font-size: 11px; opacity: 0.85;">If ${escapeHtml(item.lockedBySellerName)} leaves it for another seller, it will become available for you.</span>
             </div>
           </div>
         `;
@@ -503,7 +503,7 @@
             <div>
               <strong>YOU TOOK THIS ITEM (Selling on G2G)</strong><br>
               The other seller is blocked from selling this.<br>
-              <span style="font-size: 11px; color: var(--accent-cyan);">Closing your PC? Click "Unlock (Closing PC)" below to hand over to the other seller.</span>
+              <span style="font-size: 11px; color: var(--accent-cyan);">Want to pass this to another seller? Click "Leave for Another Seller" below.</span>
             </div>
           </div>
         `;
@@ -516,8 +516,8 @@
               <span>🔐</span> Delivery Info
             </button>
           </div>
-          <button class="btn btn-danger btn-sm" data-action="release" data-item-id="${item.id}" style="margin-top: 6px;" title="Release lock because you are shutting down PC">
-            <span>📴</span> Unlock (Closing PC / Let other seller take it)
+          <button class="btn btn-danger btn-sm" data-action="release" data-item-id="${item.id}" style="margin-top: 6px;" title="Leave this item for another seller">
+            <span>🔓</span> Leave for Another Seller
           </button>
         `;
       }
@@ -624,7 +624,6 @@
         <tr>
           <td>
             <strong style="color: #fff;">${escapeHtml(u.name)}</strong>
-            <div style="font-size: 11px; color: var(--text-dim);">${escapeHtml(u.email || '')}</div>
           </td>
           <td><span class="role-badge ${u.role}">${u.role.toUpperCase()}</span></td>
           <td>${escapeHtml(u.g2gStoreName || '—')}</td>
@@ -876,10 +875,10 @@
         return;
       }
 
-      // Release action (Closing PC / Passing to other seller)
+      // Release action (Leave for another seller)
       const releaseBtn = e.target.closest('button[data-action="release"]');
       if (releaseBtn) {
-        if (confirm('Unlock this item because you are closing your PC? The other seller will be able to take it immediately.')) {
+        if (confirm('Leave this item for another seller? It will be released so another seller can take it immediately.')) {
           releaseItem(releaseBtn.dataset.itemId);
         }
         return;
@@ -1232,8 +1231,23 @@
           const data = await res.json();
           if (data.success) {
             closeModal(document.getElementById('modalWithdraw'));
+            
+            // Instantly deduct money from local state so balance drops on screen immediately
+            const targetUser = appState.users.find(u => u.id === user.id);
+            if (targetUser) {
+              targetUser.balance = data.newBalance !== undefined 
+                ? data.newBalance 
+                : parseFloat(Math.max(0, targetUser.balance - amount).toFixed(2));
+            }
+            if (data.withdrawal) {
+              if (!appState.withdrawals) appState.withdrawals = [];
+              appState.withdrawals.unshift(data.withdrawal);
+            }
+            renderAll();
+            await fetchState();
+
             playChime();
-            showToast(`💸 Withdrawal of ${fmtCurrency(data.withdrawal.amount)} submitted! Net Received: ${fmtCurrency(data.withdrawal.netPayout)} (Fee: ${fmtCurrency(data.withdrawal.totalFee)})`, 'success');
+            showToast(`💸 Withdrawal of ${fmtCurrency(data.withdrawal.amount)} confirmed! Net Received: ${fmtCurrency(data.withdrawal.netPayout)} (Fee: ${fmtCurrency(data.withdrawal.totalFee)})`, 'success');
           } else {
             showToast(data.error || 'Withdrawal failed', 'warning');
           }
