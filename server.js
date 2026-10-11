@@ -194,6 +194,81 @@ app.get('/api/catalog', (req, res) => {
   res.json({ success: true, catalog: {} });
 });
 
+// G2G Live Market Price Checker (Top 5 Lowest Prices for ARC Raiders)
+const g2gPriceCache = new Map();
+const CACHE_TTL_MS = 60 * 1000;
+
+app.get('/api/g2g-prices', async (req, res) => {
+  const query = (req.query.query || req.query.q || '').trim();
+  if (!query) {
+    return res.status(400).json({ success: false, error: 'Query parameter is required' });
+  }
+
+  const cacheKey = query.toLowerCase();
+  const cached = g2gPriceCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+    return res.json({ success: true, ...cached.data, fromCache: true });
+  }
+
+  try {
+    const url = `https://sls.g2g.com/offer/search?service_id=0765978e-3fdf-48b4-bed3-184823aa439e&brand_id=lgc_game_35181&country=US&currency=USD&q=${encodeURIComponent(query)}&sort=lowest_price`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`G2G gateway error: HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    const rawResults = data?.payload?.results || [];
+
+    const offers = rawResults.map((r) => {
+      const price = parseFloat(r.converted_unit_price || r.display_price || r.unit_price || 0);
+      return {
+        price,
+        formattedPrice: `$${price.toFixed(2)}`,
+        title: r.title,
+        sellerName: r.username,
+        sellerRating: r.satisfaction_rate ? `${(r.satisfaction_rate * 100).toFixed(1)}%` : '100%',
+        sellerOrders: r.total_success_order || r.total_rating || 0,
+        sellerRanking: r.seller_ranking || '1',
+        availableQty: r.available_qty || 1,
+        offerId: r.offer_id,
+        url: `https://www.g2g.com/offer/${r.offer_id}`
+      };
+    }).filter((o) => o.price > 0).sort((a, b) => a.price - b.price);
+
+    const top5 = offers.slice(0, 5).map((o, idx) => ({ rank: idx + 1, ...o }));
+    const lowestPrice = top5.length ? top5[0].price : 0;
+    const avgPrice = top5.length ? (top5.reduce((acc, curr) => acc + curr.price, 0) / top5.length) : 0;
+    const recommendedPrice = lowestPrice > 0.05 ? Math.max(0.01, +(lowestPrice - 0.01).toFixed(2)) : +(lowestPrice * 0.95).toFixed(3);
+
+    const resultPayload = {
+      query,
+      game: 'ARC Raiders',
+      totalFound: rawResults.length,
+      lowestPrice: +lowestPrice.toFixed(2),
+      formattedLowestPrice: `$${lowestPrice.toFixed(2)}`,
+      averagePrice: +avgPrice.toFixed(2),
+      formattedAveragePrice: `$${avgPrice.toFixed(2)}`,
+      recommendedPrice,
+      formattedRecommendedPrice: `$${recommendedPrice.toFixed(2)}`,
+      top5,
+      fetchedAt: new Date().toISOString()
+    };
+
+    g2gPriceCache.set(cacheKey, { timestamp: Date.now(), data: resultPayload });
+    return res.json({ success: true, ...resultPayload });
+  } catch (err) {
+    console.error('Error fetching G2G market prices:', err);
+    return res.status(500).json({ success: false, error: 'Failed to retrieve live G2G prices', details: err.message });
+  }
+});
+
 // 1. Get entire state
 app.get('/api/state', async (req, res) => {
   try {

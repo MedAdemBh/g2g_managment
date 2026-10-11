@@ -207,20 +207,42 @@
     const categorySelect = document.getElementById('addItemCategory');
     const presetSelect = document.getElementById('addItemCatalogPreset');
     const datalist = document.getElementById('catalogItemPresets');
-    if (!categorySelect || !presetSelect) return;
+    if (categorySelect && presetSelect) {
+      const selectedCategory = categorySelect.value;
+      const items = arcCatalog[selectedCategory] || [];
 
-    const selectedCategory = categorySelect.value;
-    const items = arcCatalog[selectedCategory] || [];
+      if (items.length > 0) {
+        presetSelect.innerHTML = `<option value="">-- Choose item from catalog (${items.length} presets) --</option>` +
+          items.map(item => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join('');
+      } else {
+        presetSelect.innerHTML = `<option value="">-- No presets for ${escapeHtml(selectedCategory)} (type custom) --</option>`;
+      }
 
-    if (items.length > 0) {
-      presetSelect.innerHTML = `<option value="">-- Choose item from catalog (${items.length} presets) --</option>` +
-        items.map(item => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join('');
+      if (datalist) {
+        datalist.innerHTML = items.map(item => `<option value="${escapeHtml(item)}">`).join('');
+      }
+    }
+    populateRadarPresets();
+  }
+
+  function populateRadarPresets() {
+    const radarCat = document.getElementById('radarCategorySelect');
+    const radarPreset = document.getElementById('radarProductPreset');
+    if (!radarPreset) return;
+
+    const cat = radarCat ? radarCat.value : '';
+    let items = [];
+    if (cat && arcCatalog[cat]) {
+      items = arcCatalog[cat];
     } else {
-      presetSelect.innerHTML = `<option value="">-- No presets for ${escapeHtml(selectedCategory)} (type custom) --</option>`;
+      items = Object.values(arcCatalog).flat();
     }
 
-    if (datalist) {
-      datalist.innerHTML = items.map(item => `<option value="${escapeHtml(item)}">`).join('');
+    if (items.length > 0) {
+      radarPreset.innerHTML = `<option value="">-- Choose from ${items.length} ARC Raiders items --</option>` +
+        items.map(item => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join('');
+    } else {
+      radarPreset.innerHTML = '<option value="">-- No presets available --</option>';
     }
   }
 
@@ -419,6 +441,9 @@
 
           <div class="card-actions">
             ${actionButton}
+            <button class="btn btn-outline-cyan btn-sm" data-action="radar-check" data-query="${escapeHtml(item.title)}" style="width: 100%; margin-top: 6px; font-size: 11px;">
+              <span>🎯</span> Check G2G 5 Lowest
+            </button>
           </div>
         </div>
       `;
@@ -536,6 +561,9 @@
 
           <div class="card-actions">
             ${actionsHtml}
+            <button class="btn btn-outline-cyan btn-sm" data-action="radar-check" data-query="${escapeHtml(item.title)}" style="width: 100%; margin-top: 6px; font-size: 11px;">
+              <span>🎯</span> Check G2G 5 Lowest
+            </button>
           </div>
         </div>
       `;
@@ -897,6 +925,14 @@
         return;
       }
 
+      // Radar Check from item card
+      const radarBtn = e.target.closest('button[data-action="radar-check"]');
+      if (radarBtn) {
+        const query = radarBtn.dataset.query;
+        switchToRadarTabAndScan(query);
+        return;
+      }
+
       // Modals close
       if (e.target.closest('[data-close-modal]') || e.target.classList.contains('modal-overlay')) {
         document.querySelectorAll('.modal-overlay').forEach(m => closeModal(m));
@@ -1230,6 +1266,205 @@
           titleInput.value = presetSelect.value;
         }
       });
+    }
+
+    // Setup G2G Price Radar events
+    setupRadarEvents();
+  }
+
+  function setupRadarEvents() {
+    const categorySelect = document.getElementById('radarCategorySelect');
+    const presetSelect = document.getElementById('radarProductPreset');
+    const searchInput = document.getElementById('radarSearchInput');
+    const scanBtn = document.getElementById('btnScanG2GPrices');
+    const clearBtn = document.getElementById('btnClearRadar');
+
+    if (categorySelect) {
+      categorySelect.addEventListener('change', populateRadarPresets);
+    }
+
+    if (presetSelect && searchInput) {
+      presetSelect.addEventListener('change', () => {
+        if (presetSelect.value) {
+          searchInput.value = presetSelect.value;
+          triggerRadarScan(presetSelect.value);
+        }
+      });
+    }
+
+    if (scanBtn) {
+      scanBtn.addEventListener('click', () => {
+        const query = searchInput ? searchInput.value.trim() : '';
+        if (!query) {
+          showToast('Please type an item name or pick a preset to scan G2G.', 'warning');
+          return;
+        }
+        triggerRadarScan(query);
+      });
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const query = searchInput.value.trim();
+          if (query) triggerRadarScan(query);
+        }
+      });
+    }
+
+    if (clearBtn && searchInput) {
+      clearBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        if (presetSelect) presetSelect.value = '';
+        const resultsArea = document.getElementById('radarResultsArea');
+        const placeholder = document.getElementById('radarPlaceholder');
+        const errorBox = document.getElementById('radarErrorBox');
+        if (resultsArea) resultsArea.style.display = 'none';
+        if (placeholder) placeholder.style.display = 'block';
+        if (errorBox) errorBox.style.display = 'none';
+      });
+    }
+
+    // Popular tags
+    document.querySelectorAll('.radar-tag-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const q = btn.dataset.query;
+        if (searchInput) searchInput.value = q;
+        triggerRadarScan(q);
+      });
+    });
+  }
+
+  function switchToRadarTabAndScan(productQuery) {
+    document.querySelectorAll('.topic-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.topic-content').forEach(c => c.classList.remove('active'));
+    const radarTab = document.querySelector('.topic-tab[data-topic="radar"]');
+    const radarSection = document.getElementById('topicRadarSection');
+    if (radarTab) radarTab.classList.add('active');
+    if (radarSection) radarSection.classList.add('active');
+
+    const searchInput = document.getElementById('radarSearchInput');
+    if (searchInput) {
+      searchInput.value = productQuery;
+    }
+    triggerRadarScan(productQuery);
+    window.scrollTo({ top: 150, behavior: 'smooth' });
+  }
+
+  async function triggerRadarScan(query) {
+    if (!query) return;
+    const spinner = document.getElementById('radarSpinner');
+    const scanIcon = document.getElementById('radarScanIcon');
+    const scanText = document.getElementById('radarScanBtnText');
+    const resultsArea = document.getElementById('radarResultsArea');
+    const placeholder = document.getElementById('radarPlaceholder');
+    const errorBox = document.getElementById('radarErrorBox');
+
+    if (spinner) spinner.style.display = 'inline-block';
+    if (scanIcon) scanIcon.style.display = 'none';
+    if (scanText) scanText.textContent = 'Scanning G2G...';
+
+    if (placeholder) placeholder.style.display = 'none';
+    if (errorBox) errorBox.style.display = 'none';
+
+    try {
+      const res = await fetch(`/api/g2g-prices?query=${encodeURIComponent(query)}`);
+      const data = await res.json();
+
+      if (!data.success || !data.top5 || data.top5.length === 0) {
+        if (resultsArea) resultsArea.style.display = 'none';
+        if (errorBox) {
+          errorBox.style.display = 'block';
+          const errTitle = document.getElementById('radarErrorTitle');
+          const errMsg = document.getElementById('radarErrorMessage');
+          if (errTitle) errTitle.textContent = `No Offers Found for "${query}"`;
+          if (errMsg) errMsg.textContent = data.error || 'G2G marketplace currently has 0 active listings for this query. Try a broader search term (e.g. "Wolfpack" or "Bobcat").';
+        }
+        return;
+      }
+
+      // Render KPIs
+      const kpiLowest = document.getElementById('radarKpiLowest');
+      const kpiAvg = document.getElementById('radarKpiAvg');
+      const kpiRec = document.getElementById('radarKpiRecommended');
+      const kpiTotal = document.getElementById('radarKpiTotal');
+      const kpiProduct = document.getElementById('radarQueriedProduct');
+      const kpiTime = document.getElementById('radarKpiTime');
+
+      if (kpiLowest) kpiLowest.textContent = data.formattedLowestPrice;
+      if (kpiAvg) kpiAvg.textContent = data.formattedAveragePrice;
+      if (kpiRec) kpiRec.textContent = data.formattedRecommendedPrice;
+      if (kpiTotal) kpiTotal.textContent = `${data.totalFound} offers`;
+      if (kpiProduct) kpiProduct.textContent = `"${data.query}"`;
+      if (kpiTime) kpiTime.textContent = `Checked at ${new Date().toLocaleTimeString()}`;
+
+      // Render 5 Lowest Cards
+      const grid = document.getElementById('radarTop5Grid');
+      if (grid) {
+        grid.innerHTML = data.top5.map((offer, idx) => {
+          const isLowest = idx === 0;
+          return `
+            <div class="radar-offer-card ${isLowest ? 'rank-1' : ''}">
+              <div class="radar-card-header">
+                <span class="rank-badge ${isLowest ? 'rank-1' : 'rank-default'}">
+                  ${isLowest ? '🏆 #1 Lowest Price' : `#${offer.rank} Lowest`}
+                </span>
+                <span class="radar-price-tag">${escapeHtml(offer.formattedPrice)}</span>
+              </div>
+
+              <div class="radar-offer-title" title="${escapeHtml(offer.title)}">
+                ${escapeHtml(offer.title)}
+              </div>
+
+              <div class="radar-seller-info">
+                <div>
+                  <div class="radar-seller-name">
+                    <span>👤</span> ${escapeHtml(offer.sellerName)}
+                  </div>
+                  <div style="font-size: 10px; color: var(--text-dim);">
+                    Seller Rank: Tier ${escapeHtml(offer.sellerRanking)}
+                  </div>
+                </div>
+                <div style="text-align: right;">
+                  <div class="radar-seller-stat">
+                    ★ ${escapeHtml(offer.sellerRating)}
+                  </div>
+                  <div style="font-size: 10px; color: var(--text-dim);">
+                    ${Number(offer.sellerOrders).toLocaleString()} orders
+                  </div>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: auto;">
+                <span style="font-size: 11px; color: var(--text-dim);">
+                  Stock: <strong style="color: #fff;">${Number(offer.availableQty).toLocaleString()}</strong>
+                </span>
+                <a href="${escapeHtml(offer.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-cyan btn-sm" style="font-size: 11px; padding: 4px 10px;">
+                  View on G2G ↗
+                </a>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      if (resultsArea) resultsArea.style.display = 'block';
+      showToast(`Found 5 lowest competitor prices on G2G for "${query}"!`, 'success');
+    } catch (err) {
+      console.error('Radar scan error:', err);
+      if (resultsArea) resultsArea.style.display = 'none';
+      if (errorBox) {
+        errorBox.style.display = 'block';
+        const errTitle = document.getElementById('radarErrorTitle');
+        const errMsg = document.getElementById('radarErrorMessage');
+        if (errTitle) errTitle.textContent = 'Network or API Error';
+        if (errMsg) errMsg.textContent = 'Could not reach G2G API. Please check your connection and try again.';
+      }
+    } finally {
+      if (spinner) spinner.style.display = 'none';
+      if (scanIcon) scanIcon.style.display = 'inline-block';
+      if (scanText) scanText.textContent = 'Scan 5 Lowest Prices';
     }
   }
 

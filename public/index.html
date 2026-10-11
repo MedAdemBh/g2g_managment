@@ -106,6 +106,12 @@
         <span class="tab-label">Completed Sales</span>
         <span id="badgeTopicHistory" class="topic-counter">0</span>
       </button>
+
+      <button class="topic-tab" data-topic="radar">
+        <span class="tab-icon">🎯</span>
+        <span class="tab-label">G2G Price Radar (Top 5 Lowest)</span>
+        <span class="topic-counter" style="background: rgba(0,240,255,0.25); color: var(--accent-cyan); font-weight: 800;">LIVE</span>
+      </button>
     </nav>
 
     <!-- ==================== TOPIC 1: USER OFFERS ==================== -->
@@ -282,6 +288,154 @@
         <div id="feedList" class="feed-list">
           <!-- Populated by JS -->
         </div>
+      </div>
+    </section>
+
+    <!-- ==================== TOPIC 5: G2G LIVE PRICE RADAR ==================== -->
+    <section id="topicRadarSection" class="topic-content">
+      <div class="topic-header-bar">
+        <div>
+          <h2>🎯 G2G Live Market Price Radar</h2>
+          <p class="section-desc">Select any product to query the live G2G marketplace and inspect the 5 lowest active seller prices, ratings, and undercut recommendations.</p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <a href="https://www.g2g.com/categories/arc-raiders-items" target="_blank" rel="noopener noreferrer" class="btn btn-outline-cyan btn-sm">
+            <span>🌐</span> Open G2G ARC Raiders ↗
+          </a>
+        </div>
+      </div>
+
+      <!-- Radar Query Controls Card -->
+      <div class="radar-controls-card">
+        <div class="form-row" style="margin-bottom: 12px;">
+          <div class="form-group" style="flex: 1;">
+            <label>1. Pick Catalog Category</label>
+            <select id="radarCategorySelect" class="form-control">
+              <option value="">All Categories (Weapons, Blueprints, Keys...)</option>
+              <option value="Weapons">Weapons</option>
+              <option value="Blueprints">Blueprints</option>
+              <option value="Keys">Keys</option>
+              <option value="Materials">Materials</option>
+              <option value="Augments">Augments</option>
+              <option value="Quick Use">Quick Use</option>
+              <option value="Modification">Modification</option>
+              <option value="Ammunition">Ammunition</option>
+              <option value="Recyclable">Recyclable</option>
+              <option value="Trinkets">Trinkets</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex: 1.5;">
+            <label>2. Pick ARC Raiders Product Preset</label>
+            <select id="radarProductPreset" class="form-control" style="color: var(--accent-cyan); font-weight: 600;">
+              <option value="">-- Choose preset or type below --</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row" style="align-items: flex-end;">
+          <div class="form-group" style="flex: 2; margin-bottom: 0;">
+            <label>3. Product Search Query (Exact or partial name)</label>
+            <div style="position: relative;">
+              <input type="text" id="radarSearchInput" class="form-control" placeholder="e.g. Bobcat IV, Wolfpack, Stella Montis Key, Resin..." style="padding-left: 36px; font-size: 15px; font-weight: 600;">
+              <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-dim);">🔍</span>
+            </div>
+          </div>
+          <div style="flex: 1; display: flex; gap: 8px;">
+            <button id="btnScanG2GPrices" class="btn btn-primary" style="flex: 1; height: 42px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <span id="radarSpinner" style="display: none;" class="spin-icon">⏳</span>
+              <span id="radarScanIcon">⚡</span>
+              <span id="radarScanBtnText">Scan 5 Lowest Prices</span>
+            </button>
+            <button id="btnClearRadar" class="btn btn-secondary" style="height: 42px;" title="Reset Search">
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick Tag Suggestions -->
+        <div class="radar-quick-tags" style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+          <span style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; margin-right: 4px;">Popular:</span>
+          <button class="radar-tag-btn" data-query="Bobcat IV">Bobcat IV</button>
+          <button class="radar-tag-btn" data-query="Wolfpack">Wolfpack</button>
+          <button class="radar-tag-btn" data-query="Tempest">Tempest</button>
+          <button class="radar-tag-btn" data-query="Stella Montis Archives Key">Stella Montis Key</button>
+          <button class="radar-tag-btn" data-query="Dolabra">Dolabra</button>
+          <button class="radar-tag-btn" data-query="Vulcano">Vulcano</button>
+          <button class="radar-tag-btn" data-query="Combat Mk. 3">Combat Mk. 3</button>
+          <button class="radar-tag-btn" data-query="Resin">Resin</button>
+        </div>
+      </div>
+
+      <!-- Radar Results Container -->
+      <div id="radarResultsArea" style="margin-top: 24px; display: none;">
+        <!-- KPI summary banner -->
+        <div class="radar-kpi-row">
+          <div class="radar-kpi-card highlight-green">
+            <div class="kpi-icon">🏆</div>
+            <div>
+              <div class="radar-kpi-label">#1 Lowest Live Price</div>
+              <div class="radar-kpi-value" id="radarKpiLowest">$0.00</div>
+              <div class="radar-kpi-sub" id="radarKpiLowestSub">Cheapest seller on G2G</div>
+            </div>
+          </div>
+
+          <div class="radar-kpi-card highlight-cyan">
+            <div class="kpi-icon">📊</div>
+            <div>
+              <div class="radar-kpi-label">Average of Top 5 Lowest</div>
+              <div class="radar-kpi-value" id="radarKpiAvg">$0.00</div>
+              <div class="radar-kpi-sub">Market baseline avg</div>
+            </div>
+          </div>
+
+          <div class="radar-kpi-card highlight-gold">
+            <div class="kpi-icon">⚡</div>
+            <div>
+              <div class="radar-kpi-label">Recommended Undercut</div>
+              <div class="radar-kpi-value" id="radarKpiRecommended">$0.00</div>
+              <div class="radar-kpi-sub">Rank #1 cheapest to sell fast</div>
+            </div>
+          </div>
+
+          <div class="radar-kpi-card">
+            <div class="kpi-icon">🔎</div>
+            <div>
+              <div class="radar-kpi-label">Total Listings Found</div>
+              <div class="radar-kpi-value" id="radarKpiTotal">0</div>
+              <div class="radar-kpi-sub" id="radarKpiTime">Updated just now</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5 Lowest Offers Grid / List -->
+        <div style="margin-top: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <h3 style="font-size: 16px; color: #fff; display: flex; align-items: center; gap: 8px;">
+              <span>🥇</span> Top 5 Lowest Prices for <span id="radarQueriedProduct" style="color: var(--accent-cyan); font-weight: 800;">Product</span>
+            </h3>
+            <span style="font-size: 12px; color: var(--text-dim);">Live G2G Marketplace Feed</span>
+          </div>
+
+          <div id="radarTop5Grid" class="radar-offers-grid">
+            <!-- Dynamically populated 5 cards -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Radar Initial / Empty State -->
+      <div id="radarPlaceholder" class="empty-state-box" style="margin-top: 24px; padding: 40px 20px;">
+        <div style="font-size: 42px; margin-bottom: 12px;">🎯</div>
+        <h4 style="font-size: 18px; color: #fff; margin-bottom: 6px;">Check Competitor Prices on G2G</h4>
+        <p style="color: var(--text-dim); max-width: 500px; margin: 0 auto 16px;">
+          Select any weapon, blueprint, key, or material from the presets above or type a name, then click <strong>"Scan 5 Lowest Prices"</strong> to view real-time market data.
+        </p>
+      </div>
+
+      <!-- Radar Error State -->
+      <div id="radarErrorBox" class="empty-state-box" style="display: none; margin-top: 24px; border-color: rgba(255, 51, 102, 0.4); background: rgba(255, 51, 102, 0.05);">
+        <div style="font-size: 36px; margin-bottom: 8px;">⚠️</div>
+        <h4 id="radarErrorTitle" style="color: var(--accent-red); margin-bottom: 4px;">No Offers Found</h4>
+        <p id="radarErrorMessage" style="color: var(--text-dim); font-size: 13px;">G2G returned 0 offers for this query. Try a broader search term (e.g. "Wolfpack" instead of "Wolfpack Mk3").</p>
       </div>
     </section>
 

@@ -976,3 +976,238 @@ textarea.form-control {
     align-items: flex-start;
   }
 }
+
+/* ========================================================
+   G2G LIVE PRICE RADAR COMPONENT STYLES
+   ======================================================== */
+.radar-controls-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  box-shadow: var(--shadow-card);
+  position: relative;
+  overflow: hidden;
+}
+
+.radar-controls-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-cyan), var(--accent-gold), transparent);
+}
+
+.radar-tag-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.radar-tag-btn:hover {
+  background: rgba(0, 240, 255, 0.15);
+  border-color: var(--accent-cyan);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.radar-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.radar-kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: var(--transition-fast);
+}
+
+.radar-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.radar-kpi-card .kpi-icon {
+  font-size: 26px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.radar-kpi-card.highlight-green {
+  border-color: rgba(0, 245, 155, 0.35);
+  background: linear-gradient(135deg, rgba(0, 245, 155, 0.05) 0%, var(--bg-card) 100%);
+}
+.radar-kpi-card.highlight-green .radar-kpi-value {
+  color: var(--accent-green);
+}
+
+.radar-kpi-card.highlight-cyan {
+  border-color: rgba(0, 240, 255, 0.35);
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.05) 0%, var(--bg-card) 100%);
+}
+.radar-kpi-card.highlight-cyan .radar-kpi-value {
+  color: var(--accent-cyan);
+}
+
+.radar-kpi-card.highlight-gold {
+  border-color: rgba(255, 183, 3, 0.35);
+  background: linear-gradient(135deg, rgba(255, 183, 3, 0.05) 0%, var(--bg-card) 100%);
+}
+.radar-kpi-card.highlight-gold .radar-kpi-value {
+  color: var(--accent-gold);
+}
+
+.radar-kpi-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.radar-kpi-value {
+  font-family: 'Outfit', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.2;
+  margin: 2px 0;
+}
+
+.radar-kpi-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.radar-offers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.radar-offer-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  transition: var(--transition-fast);
+}
+
+.radar-offer-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-bright);
+  box-shadow: 0 10px 30px rgba(0, 240, 255, 0.15);
+}
+
+.radar-offer-card.rank-1 {
+  border-color: rgba(0, 245, 155, 0.45);
+  background: linear-gradient(180deg, rgba(0, 245, 155, 0.04) 0%, var(--bg-card) 100%);
+}
+
+.radar-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.rank-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rank-badge.rank-1 {
+  background: rgba(0, 245, 155, 0.2);
+  color: var(--accent-green);
+  border: 1px solid rgba(0, 245, 155, 0.4);
+}
+
+.rank-badge.rank-default {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.radar-price-tag {
+  font-family: 'Outfit', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--accent-green);
+  line-height: 1;
+}
+
+.radar-offer-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.4;
+  margin-bottom: 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 36px;
+}
+
+.radar-seller-info {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+.radar-seller-name {
+  font-weight: 700;
+  color: var(--accent-cyan);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.radar-seller-stat {
+  font-size: 11px;
+  color: var(--accent-gold);
+}
+
+.spin-icon {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
