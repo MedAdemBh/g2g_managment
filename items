@@ -1,49 +1,75 @@
 quick use:
-Gas Grenade Trap
-Green Light Stick
-Li'l Smoke Grenade
-Light Impact Grenade
-Lure Grenade Trap
-Noisemaker
-Red Light Stick
-Snap Blast Grenade
-Yellow Light Stick
-Agave Juice
-Fruit Mix
 Acoustic Guitar
-Recorder
-Shaker
-Surge Coil
-Powered Descender
-Crash Mat
-Grapple Hook
-Tether Launcher
-White Flag
 Advanced Camera
+Agave Juice
 Banjo
 Basic Camera
+Crash Mat
 Deadline
 Dockmaster's Detector
 Emperor Beacon
 Firecracker
 Fireworks Box
+Fruit Mix
+Gas Grenade Trap
 Gas Mine
+Grapple Hook
+Green Light Stick
 Harmonica
 Integrated Binoculars
 Integrated Defibrillator
 Integrated Shield Recharger
 Laser Trap: Lure
+Li'l Smoke Grenade
+Light Impact Grenade
+Lure Grenade Trap
 Mountaineer's Detector
+Noisemaker
+Powered Descender
 Pulse Mine
+Recorder
+Red Light Stick
 Seeker Grenade
+Shaker
+Snap Blast Grenade
+Surge Coil
+Tether Launcher
 Trailblazer
+White Flag
 Yank Grenade
-blue prints:
+Yellow Light Stick
+
+blueprints:
+Advanced Camera Blueprint
+Banjo Blueprint
+Bantam Blueprint
+Canto Blueprint
+Deadline Blueprint
+Dolabra Blueprint
+Emperor Gateway Conduit Blueprint
+Gas Mine Blueprint
+Grappling Hook Blueprint
+Looting Mk.3 (Cautious)
+Looting Mk.3 (Safekeeper)
+Looting Mk.3 (Survival)
+Powered Descender Blueprint
+Pulse Mine Blueprint
+Rascal Blueprint
+Seeker Grenade Blueprint
+Smoke Grenade Blueprint
+Stiletto Blueprint
+Surge Coil Blueprint
+Tactical Mk. 3 (Defensive)
 Tactical Mk. 3 (Defensive) Blueprint
+Tactical Mk. 3 (Healing)
 Tactical Mk. 3 (Healing) Blueprint
+Tactical Mk. 3 (Revival)
+Tactical Mk. 3 (Smoke)
 Tagging Grenade Blueprint
 Tempest Blueprint
+Tether Launcher Blueprint
 Torrente Blueprint
+Trailblazer Blueprint
 Trigger Nade Blueprint
 Venator Blueprint
 Vertical Grip II Blueprint
@@ -52,148 +78,114 @@ Vita Shot Blueprint
 Vita Spray Blueprint
 Vulcano Blueprint
 Wolfpack Blueprint
-Deadline Blueprint
-Trailblazer Blueprint
-Pulse Mine Blueprint
-Gas Mine Blueprint
-Seeker Grenade Blueprint
-Smoke Grenade Blueprint
-Looting Mk.3 (Safekeeper)
-Looting Mk.3 (Cautious)
-Looting Mk.3 (Survival)
-Looting Mk.3 (Safekeeper)
-Tactical Mk. 3 (Revival)
-Tactical Mk. 3 (Defensive)
-Tactical Mk. 3 (Healing)
-Canto Blueprint
-Dolabra Blueprint
-Surge Coil Blueprint
-Rascal Blueprint
-Powered Descender Blueprint
-Tactical Mk. 3 (Smoke)
-Advanced Camera Blueprint
-Emperor Gateway Conduit Blueprint
-Grappling Hook Blueprint
-Tether Launcher Blueprint
-Stiletto Blueprint
-Bantam Blueprint
-Banjo Blueprint
+
 augments:
+Combat Mk. 1
+Combat Mk. 2
 Combat Mk. 3 (Aggressive)
-Combat Mk. 3 (Flanking)
 Combat Mk. 3 (Cautious)
-Combat Mk. 3 (Survivor)
 Combat Mk. 3 (Defensive)
+Combat Mk. 3 (Flanking)
 Combat Mk. 3 (Healing)
-Looting Mk.3 (Safekeeper)
+Combat Mk. 3 (Survivor)
+Looting Mk. 1
+Looting Mk. 2
 Looting Mk.3 (Cautious)
-Looting Mk.3 (Survivor)
 Looting Mk.3 (Safekeeper)
-Tactical Mk. 3 (Revival)
+Looting Mk.3 (Survivor)
+Tactical Mk. 1
+Tactical Mk. 2
 Tactical Mk. 3 (Defensive)
 Tactical Mk. 3 (Healing)
-Combat Mk. 2
-Looting Mk. 2
-Tactical Mk. 2
-Combat Mk. 1
-Looting Mk. 1
-Tactical Mk. 1
+Tactical Mk. 3 (Revival)
 Tactical Mk. 3 (Smoke)
-material:
-Basic Materials:
-Chemicals
-Fabric
-Metal Parts
-Plastic Parts
-Rubber Parts
-Planks
-Sheet Metal
-Stencil Parts
-Refined Materials:
-Magnetic Accelerator
-Power Rod
+
+materials:
 Advanced Electrical Components
 Advanced Mechanical Components
+Agave
 Antiseptic
-Explosive Compound
-Mod Components
-Crude Explosives
-Durable Cloth
-Electrical Components
-Mechanical Components
-Topside Materials:
-Complex Gun Parts
-Exodus Modules
+Apricot
+ARC Alloy
 ARC Circuitry
 ARC Motion Core
+ARC Powercell
+Assorted Seeds
+Battery
+Candleberries
+Canister
+Chemicals
+Complex Gun Parts
+Crude Explosives
+Duct Tape
+Durable Cloth
+Electrical Components
+Exodus Modules
+Explosive Compound
+Fabric
+Fertiliser
+Fossilized Lighthing
+Great Mullein
 Heavy Gun Parts
+Lemon
 Light Gun Parts
+Magnet
+Magnetic Accelerator
+Mechanical Components
 Medium Gun Parts
+Metal Parts
+Mod Components
 Moss
+Mushroom
+Oil
+Olives
+Planks
+Plastic Parts
+Power Rod
+Prickly Pear
 Processor
+Resin
+Roots
 Rope
+Rubber Parts
 Sensors
+Sheet Metal
 Shotgun Parts
+Simple Gun Parts
+Snowball
 Speaker Component
+Steel Spring
+Stencil Parts
 Synthesized Fuel
 Syringe
 Voltage Converter
-ARC Alloy
-Battery
-Canister
-Duct Tape
-Great Mullein
-Magnet
-Oil
-Simple Gun Parts
-Steel Spring
 Wires
-ARC Powercell
-Nature:
-Olives
-Roots
-Agave
-Apricot
-Assorted Seeds
-Lemon
-Mushroom
-Prickly Pear
-Resin
-Candleberries
-Fertiliser
-Fossilized Lighthing
-Snowball
+
 keys:
-Stella Montis Archives Key
-Stella Montis Medical Storage Key
-Blue Gate Confiscation Room Key
-Buried City Town Hall Key
-Dam Control Tower Key
-Blue Gate Communication Tower Key
-Buried City Hospital Key
-Dam Testing Annex Key
-Outskirts Bunker Key
-Raider Hatch Key
-Spaceport Container Storage Key
+Ancient Fort Security Code
 Blue Gate Cellar Key
+Blue Gate Communication Tower Key
+Blue Gate Confiscation Room Key
 Blue Gate Village Key
+Buried City Hospital Key
 Buried City JKV Employee Access Card
 Buried City Residential Master Key
+Buried City Town Hall Key
+Dam Control Tower Key
+Dam Controlled Access Zone Key
 Dam Staff Room Key
 Dam Surveillance Key
-Patrol Car Key
-Spaceport Control Tower Key
-Spaceport Trench Tower Key
-Spaceport Warehouse Key
-Ancient Fort Security Code
-Dam Controlled Access Zone Key
+Dam Testing Annex Key
 Emperor Gateway Conduit
 Expired Security Code
+Outskirts Bunker Key
+Patrol Car Key
 Pendola Pass Observatory Key
 Pendola Pass Old Town Key
 Pendola Pass Railyard Key
 Pendola Pass Train Station Key
 Pilgrim’s Peak Security Code
+Raider Hatch Key
 Raider’s Refuge Security Code
 Reinforced Reception Security Code
 Riven Tides Classified Records Keycard
@@ -206,5 +198,11 @@ Riven Tides Hotel Keycard No. 208
 Riven Tides Hotel Keycard No. 311
 Riven Tides Hotel Keycard No. 404
 Riven Tides Secure Storage Keycard
+Spaceport Container Storage Key
+Spaceport Control Tower Key
+Spaceport Trench Tower Key
+Spaceport Warehouse Key
+Stella Montis Archives Key
 Stella Montis Assembly Admin Key
+Stella Montis Medical Storage Key
 Stella Montis Security Checkpoint Key
