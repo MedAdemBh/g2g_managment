@@ -235,7 +235,9 @@
     if (cat && arcCatalog[cat]) {
       items = arcCatalog[cat];
     } else {
-      items = Object.values(arcCatalog).flat();
+      items = Array.from(new Set(Object.values(arcCatalog).flat())).sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: 'base' })
+      );
     }
 
     if (items.length > 0) {

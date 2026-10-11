@@ -1,43 +1,96 @@
 quick use:
 Acoustic Guitar
+Adrenaline Shot
 Advanced Camera
 Agave Juice
+Bandage
 Banjo
+Barricade Kit
 Basic Camera
+Binoculars
+Blaze Grenade
+Blaze Grenade Trap
+Blue Light Stick
 Crash Mat
 Deadline
+Defibrillator
 Dockmaster's Detector
+Door Blocker
 Emperor Beacon
+Explosive Mine
 Firecracker
 Fireworks Box
+Flame Spray
 Fruit Mix
+Gas Grenade
 Gas Grenade Trap
 Gas Mine
 Grapple Hook
 Green Light Stick
 Harmonica
+Heavy Fuze Grenade
+Herbal Bandage
 Integrated Binoculars
 Integrated Defibrillator
 Integrated Shield Recharger
+Jolt Mine
 Laser Trap: Lure
 Li'l Smoke Grenade
 Light Impact Grenade
+Lure Grenade
 Lure Grenade Trap
 Mountaineer's Detector
 Noisemaker
+Photoelectric Cloak
 Powered Descender
 Pulse Mine
 Recorder
 Red Light Stick
+Remote Raider Flare
 Seeker Grenade
 Shaker
+Shield Recharger
+Showstopper
+Shrapnel Grenade
+Smoke Grenade
+Smoke Grenade Trap
 Snap Blast Grenade
+Snap Hook
+Snaphook
+Sterilized Bandage
 Surge Coil
+Surge Shield Recharger
+Tagging Grenade
 Tether Launcher
 Trailblazer
+Trigger 'Nade
+Vita Shot
+Vita Spray
 White Flag
+Wolfpack
 Yank Grenade
 Yellow Light Stick
+Zipline
+
+weapons:
+Anvil
+Anvil IV
+Bantam
+Bettina IV
+Bobcat IV
+Canto
+Dolabra
+Hullcracker
+Hullcracker IV
+Osprey
+Rascal
+Renegade
+Renegade IV
+Stiletto
+Tempest IV
+Torrente
+Venator
+Vulcano IV
 
 blueprints:
 Advanced Camera Blueprint
@@ -56,12 +109,13 @@ Powered Descender Blueprint
 Pulse Mine Blueprint
 Rascal Blueprint
 Seeker Grenade Blueprint
+Showstopper Blueprint
 Smoke Grenade Blueprint
+Snap Hook Blueprint
+Snaphook Blueprint
 Stiletto Blueprint
 Surge Coil Blueprint
-Tactical Mk. 3 (Defensive)
 Tactical Mk. 3 (Defensive) Blueprint
-Tactical Mk. 3 (Healing)
 Tactical Mk. 3 (Healing) Blueprint
 Tactical Mk. 3 (Revival)
 Tactical Mk. 3 (Smoke)
@@ -206,3 +260,32 @@ Stella Montis Archives Key
 Stella Montis Assembly Admin Key
 Stella Montis Medical Storage Key
 Stella Montis Security Checkpoint Key
+
+shields:
+Heavy Shield
+Light Shield
+Medium Shield
+
+modification:
+Angled Grip I
+Compensator III
+Extended Barrel
+Extended Light Mag III
+Extended Shotgun Mag III
+Horizontal Grip
+Kinetic Converter
+Lightweight Stock
+Muzzle Brake III
+Padded Stock
+Silencer I
+Silencer III
+Stable Stock I
+Vertical Grip I
+
+ammunition:
+Energy Clip
+Heavy Ammo
+Launcher Ammo
+Light Ammo
+Medium Ammo
+Shotgun Ammo
