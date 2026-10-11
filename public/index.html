@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>G2G StockNexus — ARC Raiders Management Portal</title>
+  <meta name="description" content="Exclusive ARC Raiders inventory and anti-collision system for Adem, Amine, Aymen, and Hmayma.">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><text y=%2226%22 font-size=%2226%22>⚡</text></svg>">
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+      <div class="brand-wrapper">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-info">
+          <h1>ARC Raiders <span class="version-tag">G2G NEXUS</span></h1>
+          <p>Adem & Amine (Sellers) • Aymen & Hmayma (Loot Suppliers)</p>
+        </div>
+      </div>
+
+      <!-- Quick Session Switcher (Adem, Amine, Aymen, Hmayma) -->
+      <div class="session-quick-bar">
+        <span class="switcher-label">Active User:</span>
+        <div id="quickSwitchPills" class="quick-switch-buttons">
+          <!-- Populated dynamically: Adem, Amine, Aymen, Hmayma -->
+        </div>
+      </div>
+
+      <div class="header-status-area">
+        <div id="wsStatusBadge" class="ws-status-badge">
+          <span class="pulse-dot"></span>
+          <span id="wsStatusText">Live Sync</span>
+        </div>
+        <button id="btnOpenAddItem" class="btn btn-primary btn-sm">
+          <span>➕</span> Deposit Loot
+        </button>
+      </div>
+    </header>
+
+    <!-- Active Profile Banner & Compact Stats -->
+    <section class="profile-compact-strip">
+      <div class="profile-info-pill">
+        <div id="activeUserAvatar" class="avatar-circle">AD</div>
+        <div>
+          <div class="user-greeting">Active User: <strong id="activeUserName">Adem (Seller 1)</strong> <span id="activeUserRoleBadge" class="role-badge seller">SELLER</span></div>
+          <div class="user-meta-sub" id="activeUserSub">G2G Store: AdemVault_G2G • Seller Fee: 10%</div>
+        </div>
+      </div>
+
+      <!-- Seller Fee Control Pill (Each seller fixes their own fee) -->
+      <div id="sellerFeeControls" class="mini-kpi" style="border-color: rgba(0,240,255,0.4); display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 6px 12px;">
+        <div style="display:flex; flex-direction:column;">
+          <span class="kpi-title" style="white-space: nowrap; font-size: 10px;">My Seller Fee %</span>
+          <span style="font-size: 10px; color: var(--text-dim);">(Your custom cut)</span>
+        </div>
+        <input type="number" id="inputMyFeeRate" style="width: 55px; background: var(--bg-card); border: 1px solid rgba(0,240,255,0.3); color: var(--accent-cyan); border-radius: 4px; padding: 4px 6px; font-weight: 800; font-size: 13px; text-align: center;" min="0" max="100" value="10">
+        <button id="btnSaveMyFee" class="btn btn-outline-cyan btn-sm" style="padding: 4px 8px; font-size: 11px;">Update</button>
+      </div>
+
+      <!-- Mini KPI stats -->
+      <div class="compact-kpi-group">
+        <div class="mini-kpi">
+          <span class="kpi-title">User Offers</span>
+          <strong id="miniKpiAvailable">0</strong>
+        </div>
+        <div class="mini-kpi alert-kpi">
+          <span class="kpi-title">Taken / Locked</span>
+          <strong id="miniKpiLocked" style="color: var(--accent-gold);">0</strong>
+        </div>
+        <div class="mini-kpi" style="border-color: rgba(0, 245, 155, 0.35);">
+          <span class="kpi-title">Your Balance</span>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+            <strong id="activeUserBalance" style="color: var(--accent-green); font-size: 16px;">$0.00</strong>
+            <button id="btnOpenWithdraw" class="btn btn-outline-green btn-sm" style="padding: 3px 8px; font-size: 11px; white-space: nowrap;">💸 Withdraw</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TOPIC NAVIGATION TABS (Divided Cleanly) -->
+    <nav class="topic-navigation">
+      <button class="topic-tab active" data-topic="pool">
+        <span class="tab-icon">📦</span>
+        <span class="tab-label">User Offers (Available)</span>
+        <span id="badgeTopicPool" class="topic-counter">0</span>
+      </button>
+
+      <button class="topic-tab" data-topic="operations">
+        <span class="tab-icon">🔒</span>
+        <span class="tab-label">Taken Items & Anti-Collision</span>
+        <span id="badgeTopicOps" class="topic-counter" style="background: rgba(255,183,3,0.25); color: var(--accent-gold);">0</span>
+      </button>
+
+      <button class="topic-tab" data-topic="team">
+        <span class="tab-icon">👥</span>
+        <span class="tab-label">Sellers & Users (Fees & Balances)</span>
+        <span id="badgeTopicTeam" class="topic-counter">4</span>
+      </button>
+
+      <button class="topic-tab" data-topic="history">
+        <span class="tab-icon">📜</span>
+        <span class="tab-label">Completed Sales</span>
+        <span id="badgeTopicHistory" class="topic-counter">0</span>
+      </button>
+    </nav>
+
+    <!-- ==================== TOPIC 1: USER OFFERS ==================== -->
+    <section id="topicPoolSection" class="topic-content active">
+      <div class="topic-header-bar">
+        <div>
+          <h2>📦 Available Offers from Users (Aymen & Hmayma)</h2>
+          <p class="section-desc">Users post their ARC Raiders items here with their desired payout. Adem or Amine can take an item to sell it on G2G. While one seller takes it, the other is locked out.</p>
+        </div>
+
+        <div class="topic-actions">
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="poolSearchInput" class="form-control-search" placeholder="Search weapons, blueprints, keys...">
+          </div>
+          <select id="poolCategoryFilter" class="game-select">
+            <option value="">All Item Types</option>
+            <option value="Blueprints">Blueprints</option>
+            <option value="Weapons">Weapons</option>
+            <option value="Modification">Modification</option>
+            <option value="Ammunition">Ammunition</option>
+            <option value="Augments">Augments</option>
+            <option value="Materials">Materials</option>
+            <option value="Keys">Keys</option>
+            <option value="Quick Use">Quick Use</option>
+            <option value="Recyclable">Recyclable</option>
+            <option value="Trinkets">Trinkets</option>
+            <option value="Misc">Misc</option>
+            <option value="Bundles">Bundles</option>
+            <option value="Others">Others</option>
+          </select>
+          <button id="btnDepositItemDirect" class="btn btn-primary">
+            <span>➕</span> Deposit ARC Item
+          </button>
+        </div>
+      </div>
+
+      <!-- Inventory Grid for Available Pool -->
+      <div id="poolGrid" class="items-grid">
+        <!-- Rendered by JS -->
+      </div>
+      <div id="poolEmptyState" class="empty-state-box" style="display:none;">
+        <div class="empty-icon">📦</div>
+        <h3>No items currently in the available stock pool</h3>
+        <p>Aymen or Hmayma can click "Deposit Stock" to add game accounts, currency, or keys.</p>
+      </div>
+    </section>
+
+    <!-- ==================== TOPIC 2: TAKEN ITEMS & ANTI-COLLISION ==================== -->
+    <section id="topicOperationsSection" class="topic-content">
+      <div class="topic-header-bar">
+        <div>
+          <h2>🔒 Taken Items & Anti-Collision Locks</h2>
+          <p class="section-desc">Items currently taken by Adem or Amine to sell on G2G. If you close your PC, click <strong>"📴 Unlock (Closing PC)"</strong> so the other seller can sell it.</p>
+        </div>
+
+        <div class="ops-filter-toggles">
+          <button class="btn btn-secondary btn-sm active" data-ops-filter="all">All Taken Items</button>
+          <button class="btn btn-secondary btn-sm" data-ops-filter="mine">👤 My Taken Items</button>
+        </div>
+      </div>
+
+      <!-- Anti-Double-Selling explanation card -->
+      <div class="collision-info-callout">
+        <div style="font-size: 22px;">🛡️</div>
+        <div>
+          <strong>Closing PC / Handover Feature:</strong> When Adem takes an item, Amine cannot sell it. But if Adem shuts down his computer, he can click <em>"📴 Unlock (Closing PC)"</em> to release the lock, allowing Amine to take and sell it immediately without double-selling!
+        </div>
+      </div>
+
+      <!-- Operations Grid -->
+      <div id="operationsGrid" class="items-grid">
+        <!-- Rendered by JS -->
+      </div>
+      <div id="opsEmptyState" class="empty-state-box" style="display:none;">
+        <div class="empty-icon">🔒</div>
+        <h3>No items currently locked</h3>
+        <p>Go to the <strong>User Offers</strong> tab to take available items.</p>
+      </div>
+    </section>
+
+    <!-- ==================== TOPIC 3: SELLERS & USERS DIRECTORY ==================== -->
+    <section id="topicTeamSection" class="topic-content">
+      <div class="topic-header-bar">
+        <div>
+          <h2>👥 Team, Store Profiles & Balances</h2>
+          <p class="section-desc">Manage store accounts for sellers (<strong>Adem & Amine</strong>) and inventory providers (<strong>Aymen & Hmayma</strong>).</p>
+        </div>
+        <button id="btnOpenAddUser" class="btn btn-primary">
+          <span>➕</span> Add New Member
+        </button>
+      </div>
+
+      <!-- Team Members Cards Grid -->
+      <div class="team-cards-grid" id="teamCardsGrid">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- Detailed Balances Table -->
+      <div class="table-container-card">
+        <h3 style="margin-bottom: 12px; font-size: 16px;">Ledger & Commission Breakdown</h3>
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Role</th>
+                <th>G2G Store / Profile</th>
+                <th>Commission</th>
+                <th>Balance (Owed / Earned)</th>
+                <th>Quick Action</th>
+              </tr>
+            </thead>
+            <tbody id="userTableBody">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Withdrawals History Card -->
+      <div class="table-container-card" style="margin-top: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div>
+            <h3 style="font-size: 16px; margin: 0;">💸 Payout & Withdrawal Records</h3>
+            <p style="font-size: 12px; color: var(--text-dim); margin: 2px 0 0 0;">Flat fee: $1.00 + 5% of total withdrawn balance.</p>
+          </div>
+          <button id="btnOpenWithdrawSection" class="btn btn-outline-cyan btn-sm">💸 Request Withdrawal</button>
+        </div>
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Date & Time</th>
+                <th>Member</th>
+                <th>Gross Amount</th>
+                <th>Fee Breakdown ($1.00 + 5%)</th>
+                <th>Net Payout</th>
+                <th>Method / Destination</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="withdrawalsTableBody">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TOPIC 4: SALES HISTORY & AUDIT LOGS ==================== -->
+    <section id="topicHistorySection" class="topic-content">
+      <div class="topic-header-bar">
+        <div>
+          <h2>📜 Completed Sales & Live Audit History</h2>
+          <p class="section-desc">Track completed G2G orders, payouts to Aymen and Hmayma, and seller commission profits.</p>
+        </div>
+      </div>
+
+      <!-- Completed Sales Grid -->
+      <h3 style="font-size: 16px; margin-bottom: 14px; color: var(--accent-green); display: flex; align-items: center; gap: 8px;">
+        <span>🎉</span> Completed G2G Transactions
+      </h3>
+      <div id="soldGrid" class="items-grid" style="margin-bottom: 30px;">
+        <!-- Populated by JS -->
+      </div>
+      <div id="soldEmptyState" class="empty-state-box" style="display:none; margin-bottom: 30px;">
+        <p>No completed sales recorded yet.</p>
+      </div>
+
+      <!-- Audit Log Trail -->
+      <div class="feed-panel">
+        <h3 style="margin-bottom: 14px; font-size: 15px;">Live Anti-Collision & Claim Trail</h3>
+        <div id="feedList" class="feed-list">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- Modal 1: Add New Offer / Stock Item -->
+  <div id="modalAddItem" class="modal-overlay">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <h3><span>📦</span> Deposit Item / Make Offer</h3>
+          <p style="font-size: 12px; color: var(--text-dim); margin-top: 2px;">Normal users (Aymen & Hmayma) make offers. Adem or Amine takes it to sell on G2G.</p>
+        </div>
+        <button class="btn-close-modal" data-close-modal>&times;</button>
+      </div>
+      <form id="formAddItem">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Item Type / Category *</label>
+            <select id="addItemCategory" class="form-control" required>
+              <option value="Blueprints">Blueprints</option>
+              <option value="Weapons">Weapons</option>
+              <option value="Modification">Modification</option>
+              <option value="Ammunition">Ammunition</option>
+              <option value="Augments">Augments</option>
+              <option value="Materials">Materials</option>
+              <option value="Keys">Keys</option>
+              <option value="Quick Use">Quick Use</option>
+              <option value="Recyclable">Recyclable</option>
+              <option value="Trinkets">Trinkets</option>
+              <option value="Misc">Misc</option>
+              <option value="Bundles">Bundles</option>
+              <option value="Others">Others</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Deposited By (User / Supplier) *</label>
+            <select id="addItemSupplier" class="form-control" required>
+              <!-- Auto-populated: Aymen, Hmayma, etc. -->
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>ARC Catalog Item Preset (Auto-fills title)</label>
+          <select id="addItemCatalogPreset" class="form-control" style="border-color: rgba(0,240,255,0.3); color: var(--accent-cyan);">
+            <option value="">-- Choose an item from ARC catalog or type below --</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Item Title / Listing Name *</label>
+          <input type="text" id="addItemTitle" class="form-control" placeholder="Select from presets above or type custom name" required list="catalogItemPresets">
+          <datalist id="catalogItemPresets"></datalist>
+        </div>
+
+        <div class="form-group">
+          <label>Guaranteed Payout You Want ($) *</label>
+          <input type="number" step="0.01" id="addItemSupplierPrice" class="form-control" placeholder="e.g. 35.00" required style="font-size: 16px; font-weight: 700; color: #fff;">
+          <small style="color: var(--accent-green); font-size: 11px;">You receive 100% of this amount when Adem or Amine sells your item.</small>
+        </div>
+
+        <div class="form-group">
+          <label>In-Game Delivery Coordinates / Meetup Details *</label>
+          <textarea id="addItemCredentials" class="form-control" placeholder="Steam Friend Code, Discord Tag, Extraction Silo / Drop Zone, or Meetup Instructions (Hidden until claimed by seller)" required rows="3"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Optional Notes / Server Info</label>
+          <input type="text" id="addItemNotes" class="form-control" placeholder="e.g. In stock ready for instant trade, NA server">
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
+          <button type="submit" class="btn btn-primary">➕ Post Offer into Stock Pool</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 2: Add New User / Seller -->
+  <div id="modalAddUser" class="modal-overlay">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3><span>👥</span> Register New Member</h3>
+        <button class="btn-close-modal" data-close-modal>&times;</button>
+      </div>
+      <form id="formAddUser">
+        <div class="form-group">
+          <label>Role *</label>
+          <select id="addUserRole" class="form-control" required>
+            <option value="seller">Seller (Adem / Amine store operator)</option>
+            <option value="supplier">User / Supplier (Provides stock like Aymen / Hmayma)</option>
+            <option value="admin">Administrator</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Display Name *</label>
+          <input type="text" id="addUserName" class="form-control" placeholder="e.g. Karim (Seller 3)" required>
+        </div>
+
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="addUserEmail" class="form-control" placeholder="e.g. karim@g2g.com">
+        </div>
+
+        <div id="sellerExtraFields">
+          <div class="form-group">
+            <label>G2G Store Name</label>
+            <input type="text" id="addUserG2gStore" class="form-control" placeholder="e.g. KarimVault_G2G">
+          </div>
+          <div class="form-group">
+            <label>Commission Rate (%)</label>
+            <input type="number" id="addUserCommission" class="form-control" value="10" min="0" max="100">
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Member</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Mark Sold on G2G -->
+  <div id="modalMarkSold" class="modal-overlay">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3><span>🎉</span> Complete Sale on G2G</h3>
+        <button class="btn-close-modal" data-close-modal>&times;</button>
+      </div>
+      <form id="formMarkSold">
+        <input type="hidden" id="markSoldItemId">
+        <p id="markSoldItemTitle" style="color: #fff; font-weight: 600; margin-bottom: 14px; font-size: 15px;"></p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>User Payout Guaranteed ($)</label>
+            <input type="text" id="markSoldSupplierPayout" class="form-control" readonly style="opacity: 0.85; font-weight: 700; color: #fff;">
+          </div>
+          <div class="form-group">
+            <label>Final Price on G2G ($) *</label>
+            <input type="number" step="0.01" id="markSoldFinalPrice" class="form-control" required style="font-weight: 700; color: var(--accent-cyan);">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Optional G2G Order / Invoice #</label>
+          <input type="text" id="markSoldOrderId" class="form-control" placeholder="e.g. G2G-ORD-771829 (optional)">
+        </div>
+
+        <div id="markSoldProfitPreview" style="background: rgba(0, 245, 155, 0.1); border: 1px solid rgba(0, 245, 155, 0.25); border-radius: var(--radius-sm); padding: 12px; font-size: 13px; color: var(--accent-green); margin-bottom: 16px;">
+          Your Seller Fee Cut: <strong>$0.00</strong> will be credited to your balance.
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
+          <button type="submit" class="btn btn-success">🎉 Finalize & Credit Balances</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 5: View Secret Credentials -->
+  <div id="modalViewCredentials" class="modal-overlay">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3><span>🔐</span> Credentials & Delivery Info</h3>
+        <button class="btn-close-modal" data-close-modal>&times;</button>
+      </div>
+      <div>
+        <p id="credItemTitle" style="color: #fff; font-weight: 600; margin-bottom: 8px;"></p>
+        <div id="credContentBox" class="credential-box"></div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+          <button id="btnCopyCredentials" class="btn btn-outline-cyan btn-sm">
+            <span>📋</span> Copy to Clipboard
+          </button>
+          <button type="button" class="btn btn-secondary" data-close-modal>Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 6: Withdraw Money -->
+  <div id="modalWithdraw" class="modal-overlay">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3><span>💸</span> Withdraw Balance</h3>
+        <button class="btn-close-modal" data-close-modal>&times;</button>
+      </div>
+      <form id="formWithdraw">
+        <div style="background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <span style="font-size: 11px; color: var(--text-dim); text-transform: uppercase;">Account</span>
+              <div id="withdrawUserName" style="font-size: 14px; font-weight: 700; color: #fff;">Adem (Seller 1)</div>
+            </div>
+            <div style="text-align: right;">
+              <span style="font-size: 11px; color: var(--text-dim); text-transform: uppercase;">Available Balance</span>
+              <div id="withdrawAvailableBalance" style="font-size: 16px; font-weight: 800; color: var(--accent-green);">$0.00</div>
+            </div>
+          </div>
+          <div style="margin-top: 8px; font-size: 11px; color: var(--accent-cyan);">
+            ⚡ Withdrawal Fee: <strong>$1.00 flat</strong> + <strong>5%</strong> of the withdrawn amount.
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label style="margin: 0;">Withdrawal Amount ($) *</label>
+            <button type="button" id="btnWithdrawMax" class="btn btn-outline-cyan btn-sm" style="padding: 2px 8px; font-size: 11px;">Max Balance</button>
+          </div>
+          <input type="number" step="0.01" min="1.01" id="withdrawAmount" class="form-control" placeholder="e.g. 50.00" required style="font-size: 18px; font-weight: 800; color: #fff;">
+          <small id="withdrawAmountHint" style="color: var(--text-dim); font-size: 11px;">Minimum withdrawal is $1.01.</small>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Payout Method *</label>
+            <select id="withdrawMethod" class="form-control" required>
+              <option value="G2G Balance">G2G Wallet Balance</option>
+              <option value="PayPal">PayPal</option>
+              <option value="Bank Wire / SEPA">Bank Wire / SEPA</option>
+              <option value="Crypto (USDT TRC20)">Crypto (USDT TRC20)</option>
+              <option value="Wise">Wise Transfer</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Destination Account / Tag *</label>
+            <input type="text" id="withdrawDestination" class="form-control" placeholder="e.g. email@paypal.com or IBAN" required>
+          </div>
+        </div>
+
+        <!-- Dynamic Live Calculation Card -->
+        <div id="withdrawBreakdownCard" style="background: rgba(15, 21, 35, 0.9); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 18px;">
+          <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px;">Calculation Breakdown</div>
+          
+          <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+            <span style="color: var(--text-muted);">Amount Requested:</span>
+            <strong id="previewWithdrawGross" style="color: #fff;">$0.00</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; color: var(--text-dim);">
+            <span>Flat Fee:</span>
+            <span id="previewWithdrawFixed" style="color: var(--accent-red);">-$1.00</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; color: var(--text-dim);">
+            <span>Percentage Fee (5%):</span>
+            <span id="previewWithdrawPercent" style="color: var(--accent-red);">-$0.00</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed var(--border-subtle);">
+            <span style="font-weight: 600; color: var(--accent-gold);">Total Withdrawal Fee:</span>
+            <strong id="previewWithdrawTotalFee" style="color: var(--accent-red);">-$1.00</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; color: var(--accent-green);">
+            <span>Net You Will Receive:</span>
+            <span id="previewWithdrawNet">$0.00</span>
+          </div>
+        </div>
+
+        <div id="withdrawAlertBox" style="display: none; padding: 10px 12px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 14px;"></div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
+          <button type="submit" id="btnSubmitWithdraw" class="btn btn-success">💸 Confirm Withdrawal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Main Application Script -->
+  <script src="js/app.js"></script>
+</body>
+</html>
