@@ -1773,83 +1773,41 @@
       }
       document.getElementById('multiScanTimestamp').textContent = `Checked at ${new Date().toLocaleTimeString()} (auto-synced 30s) • ${data.results.length} items`;
 
-      // Render Comparison Table Body
+      // Render Comparison Table Body (Lowest Prices Only)
       const tbody = document.getElementById('radarMultiTableBody');
       if (tbody) {
-        tbody.innerHTML = data.results.map((r, rowIdx) => {
-          const cheapestSeller = r.top5 && r.top5.length > 0 ? r.top5[0] : null;
-          const detailsId = `radar_details_${rowIdx}`;
-
-          const top5CardsHtml = (r.top5 || []).map((offer, idx) => {
-            const isLowest = idx === 0;
-            return `
-              <div class="radar-offer-card ${isLowest ? 'rank-1' : ''}" style="margin: 0;">
-                <div class="radar-card-header">
-                  <span class="rank-badge ${isLowest ? 'rank-1' : 'rank-default'}">
-                    ${isLowest ? '🏆 #1 Lowest' : `#${offer.rank}`}
-                  </span>
-                  <span class="radar-price-tag">${escapeHtml(offer.formattedPrice)}</span>
-                </div>
-                <div class="radar-offer-title" style="min-height: auto; margin-bottom: 8px;">
-                  ${escapeHtml(offer.title)}
-                </div>
-                <div class="radar-seller-info" style="margin-bottom: 8px;">
-                  <span class="radar-seller-name">👤 ${escapeHtml(offer.sellerName)}</span>
-                  <span class="radar-seller-stat">★ ${escapeHtml(offer.sellerRating)} (${offer.sellerOrders})</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto;">
-                  <span style="font-size: 11px; color: var(--text-dim);">Stock: <strong style="color: #fff;">${Number(offer.availableQty).toLocaleString()}</strong></span>
-                  <a href="${escapeHtml(offer.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-cyan btn-sm" style="font-size: 10px; padding: 3px 8px;">View G2G ↗</a>
-                </div>
-              </div>
-            `;
-          }).join('');
+        tbody.innerHTML = data.results.map((r) => {
+          const cheapestSeller = r.lowestSeller || (r.top5 && r.top5.length > 0 ? r.top5[0] : null);
+          const g2gUrl = cheapestSeller?.url || `https://www.g2g.com/categories/arc-raiders-items?q=${encodeURIComponent(r.query)}`;
 
           return `
             <tr>
               <td>
-                <strong style="color: #fff; font-size: 14px;">${escapeHtml(r.query)}</strong>
-                <div style="font-size: 11px; color: var(--text-dim);">${r.totalFound} active offers</div>
+                <strong style="color: #fff; font-size: 15px;">${escapeHtml(r.query)}</strong>
+                <div style="font-size: 11px; color: var(--text-dim);">${r.totalFound} active listings on G2G</div>
               </td>
               <td>
-                <strong style="font-size: 16px; color: var(--accent-green); font-family: Outfit, sans-serif;">
+                <strong style="font-size: 18px; color: var(--accent-green); font-family: Outfit, sans-serif; letter-spacing: 0.02em;">
                   ${r.formattedLowestPrice}
                 </strong>
               </td>
-              <td style="color: var(--accent-cyan); font-weight: 600;">
-                ${r.formattedAveragePrice}
-              </td>
-              <td style="color: var(--accent-gold); font-weight: 700;">
-                ${r.formattedRecommendedPrice}
-              </td>
               <td>
                 ${cheapestSeller ? `
-                  <div style="font-weight: 600; color: #fff;">${escapeHtml(cheapestSeller.sellerName)}</div>
-                  <div style="font-size: 11px; color: var(--text-dim);">★ ${escapeHtml(cheapestSeller.sellerRating)} • ${Number(cheapestSeller.sellerOrders).toLocaleString()} orders</div>
+                  <div style="font-weight: 700; color: #fff; font-size: 13px;">👤 ${escapeHtml(cheapestSeller.name || cheapestSeller.sellerName)}</div>
+                  <div style="font-size: 11px; color: var(--accent-cyan);">★ ${escapeHtml(cheapestSeller.rating || cheapestSeller.sellerRating)} • ${Number(cheapestSeller.orders || cheapestSeller.sellerOrders || 0).toLocaleString()} orders</div>
                 ` : '<span style="color: var(--text-dim);">—</span>'}
               </td>
               <td>
-                <span class="rank-badge rank-default">${r.totalFound} offers</span>
+                <span style="font-weight: 600; color: #fff;">${Number(cheapestSeller?.stock || cheapestSeller?.availableQty || 1).toLocaleString()}</span>
+                <span style="font-size: 11px; color: var(--text-dim);"> units</span>
               </td>
               <td>
-                <button type="button" class="btn btn-outline-cyan btn-sm" data-toggle-details="${detailsId}" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;">
-                  Top 5 Sellers ▾
-                </button>
+                <span class="rank-badge rank-default" style="background: rgba(0, 240, 255, 0.1); color: var(--accent-cyan);">${r.totalFound} offers</span>
               </td>
-            </tr>
-            <tr id="${detailsId}" style="display: none; background: rgba(0,0,0,0.4);">
-              <td colspan="7" style="padding: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                  <span style="font-size: 12px; font-weight: 700; color: var(--accent-cyan);">
-                    🏆 5 Lowest Sellers for "${escapeHtml(r.query)}"
-                  </span>
-                  <a href="https://www.g2g.com/categories/arc-raiders-items?q=${encodeURIComponent(r.query)}" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: var(--accent-cyan);">
-                    Search on G2G.com ↗
-                  </a>
-                </div>
-                <div class="radar-offers-grid" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;">
-                  ${top5CardsHtml || '<div style="color: var(--text-dim);">No offers found</div>'}
-                </div>
+              <td style="text-align: right;">
+                <a href="${escapeHtml(g2gUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-cyan btn-sm" style="font-size: 11px; padding: 5px 12px; white-space: nowrap;">
+                  View on G2G ↗
+                </a>
               </td>
             </tr>
           `;

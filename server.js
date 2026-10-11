@@ -204,7 +204,7 @@ async function fetchG2GLowestOffer(query, forceFresh = false) {
   }
 
   try {
-    const url = `https://sls.g2g.com/offer/search?service_id=0765978e-3fdf-48b4-bed3-184823aa439e&brand_id=lgc_game_35181&country=US&currency=USD&q=${encodeURIComponent(trimmed)}&sort=lowest_price`;
+    const url = `https://sls.g2g.com/offer/search?service_id=0765978e-3fdf-48b4-bed3-184823aa439e&brand_id=lgc_game_35181&country=US&currency=USD&q=${encodeURIComponent(trimmed)}&group=0&sort=lowest_price`;
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -219,11 +219,34 @@ async function fetchG2GLowestOffer(query, forceFresh = false) {
     const data = await response.json();
     const rawResults = data?.payload?.results || [];
 
-    const offers = rawResults.map((r) => {
+    const cleanQ = trimmed.toLowerCase().replace(/[\s\-_]/g, '');
+    let rawOffers = rawResults;
+
+    // Isolate genuine individual catalog item offers (e.g., "All Platform > Quick Use > Showstopper")
+    const catalogMatches = rawResults.filter((r) => {
+      if (!r.title || !r.title.includes('>')) return false;
+      const lastPart = r.title.split('>').pop().trim().toLowerCase().replace(/[\s\-_]/g, '');
+      return lastPart === cleanQ || lastPart.includes(cleanQ);
+    });
+
+    if (catalogMatches.length > 0) {
+      rawOffers = catalogMatches;
+    } else {
+      // Exclude multi-item bundles or promotional spam packs
+      const nonBundles = rawResults.filter((r) => {
+        return !/bundle|pack\b|pvp|tier|k\/m\b/i.test(r.title || '');
+      });
+      if (nonBundles.length > 0) rawOffers = nonBundles;
+    }
+
+    const offers = rawOffers.map((r) => {
       const price = parseFloat(r.converted_unit_price || r.display_price || r.unit_price || 0);
+      const formattedPrice = price > 0 && price < 0.10
+        ? `$${price.toFixed(3)}`
+        : `$${price.toFixed(2)}`;
       return {
         price,
-        formattedPrice: `$${price.toFixed(2)}`,
+        formattedPrice,
         title: r.title,
         sellerName: r.username,
         sellerRating: r.satisfaction_rate ? `${(r.satisfaction_rate * 100).toFixed(1)}%` : '100%',
@@ -233,23 +256,32 @@ async function fetchG2GLowestOffer(query, forceFresh = false) {
         offerId: r.offer_id,
         url: `https://www.g2g.com/offer/${r.offer_id}`
       };
-    }).filter((o) => o.price >= 0.01).sort((a, b) => a.price - b.price);
+    }).filter((o) => o.price > 0).sort((a, b) => a.price - b.price);
 
     const top5 = offers.slice(0, 5).map((o, idx) => ({ rank: idx + 1, ...o }));
-    const lowestPrice = top5.length ? top5[0].price : 0;
+    const lowestOffer = top5.length ? top5[0] : null;
+    const lowestPrice = lowestOffer ? lowestOffer.price : 0;
+    const formattedLowestPrice = lowestOffer ? lowestOffer.formattedPrice : '$0.00';
     const avgPrice = top5.length ? (top5.reduce((acc, curr) => acc + curr.price, 0) / top5.length) : 0;
     const recommendedPrice = lowestPrice > 0.05 ? Math.max(0.01, +(lowestPrice - 0.01).toFixed(2)) : +(lowestPrice * 0.95).toFixed(3);
 
     const resultPayload = {
       query: trimmed,
       game: 'ARC Raiders',
-      totalFound: rawResults.length,
-      lowestPrice: +lowestPrice.toFixed(2),
-      formattedLowestPrice: `$${lowestPrice.toFixed(2)}`,
-      averagePrice: +avgPrice.toFixed(2),
-      formattedAveragePrice: `$${avgPrice.toFixed(2)}`,
+      totalFound: rawOffers.length,
+      lowestPrice: +lowestPrice.toFixed(4),
+      formattedLowestPrice,
+      lowestSeller: lowestOffer ? {
+        name: lowestOffer.sellerName,
+        rating: lowestOffer.sellerRating,
+        orders: lowestOffer.sellerOrders,
+        stock: lowestOffer.availableQty,
+        url: lowestOffer.url
+      } : null,
+      averagePrice: +avgPrice.toFixed(3),
+      formattedAveragePrice: `$${avgPrice.toFixed(avgPrice < 0.10 ? 3 : 2)}`,
       recommendedPrice,
-      formattedRecommendedPrice: `$${recommendedPrice.toFixed(2)}`,
+      formattedRecommendedPrice: `$${recommendedPrice.toFixed(recommendedPrice < 0.10 ? 3 : 2)}`,
       top5,
       fetchedAt: new Date().toISOString()
     };
@@ -263,6 +295,7 @@ async function fetchG2GLowestOffer(query, forceFresh = false) {
       error: err.message,
       lowestPrice: 0,
       formattedLowestPrice: '$0.00',
+      lowestSeller: null,
       averagePrice: 0,
       formattedAveragePrice: '$0.00',
       recommendedPrice: 0,
