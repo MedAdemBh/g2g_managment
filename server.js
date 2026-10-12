@@ -411,6 +411,7 @@ app.post('/api/items', async (req, res) => {
   const {
     title,
     category,
+    quantity,
     supplierId,
     supplierTargetPrice,
     secretCredentials,
@@ -433,12 +434,14 @@ app.post('/api/items', async (req, res) => {
   }
 
   const sPrice = parseFloat(supplierTargetPrice) || 0;
+  const qty = Math.max(1, parseInt(quantity, 10) || 1);
 
   const newItem = {
     id: `item_${Date.now()}`,
     title,
     game: 'ARC Raiders',
     category,
+    quantity: qty,
     supplierId,
     supplierName,
     supplierTargetPrice: sPrice,
@@ -577,9 +580,11 @@ app.post('/api/items/:id/mark-sold', async (req, res) => {
     return res.status(403).json({ success: false, error: 'Only the claiming seller can finalize the sale.' });
   }
 
-  const finalSoldPrice = parseFloat(finalPrice) || item.g2gListingPrice;
-  const supplierPayout = item.supplierTargetPrice;
-  const grossProfit = finalSoldPrice - supplierPayout;
+  const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+  const totalItemCost = (item.supplierTargetPrice || 0) * qty;
+  const finalSoldPrice = parseFloat(finalPrice) || totalItemCost;
+  const supplierPayout = totalItemCost;
+  const grossProfit = Math.max(0, finalSoldPrice - supplierPayout);
 
   item.status = 'sold';
   item.g2gOrderId = g2gOrderId || `G2G-ORD-${Math.floor(1000000 + Math.random() * 9000000)}`;
@@ -607,9 +612,9 @@ app.post('/api/items/:id/mark-sold', async (req, res) => {
   await logActivity(
     'ITEM_SOLD',
     item.lockedBySellerName,
-    `🎉 SOLD! "${item.title}" on G2G for $${finalSoldPrice.toFixed(2)} (Order ${item.g2gOrderId}). Supplier +$${supplierPayout.toFixed(2)}, Seller +$${grossProfit.toFixed(2)}`
+    `🎉 SOLD! "${item.title}" (${qty}x) on G2G for $${finalSoldPrice.toFixed(2)} (Order ${item.g2gOrderId}). Supplier +$${supplierPayout.toFixed(2)}${grossProfit > 0 ? `, Seller +$${grossProfit.toFixed(2)}` : ''}`
   );
-  await broadcastUpdate('ITEM_SOLD', `🎉 "${item.title}" SOLD on G2G for $${finalSoldPrice.toFixed(2)}!`, item.lockedBySellerName);
+  await broadcastUpdate('ITEM_SOLD', `🎉 "${item.title}" (${qty}x) SOLD on G2G for $${finalSoldPrice.toFixed(2)}!`, item.lockedBySellerName);
   res.json({ success: true, item, profit: grossProfit, supplierPayout });
 });
 

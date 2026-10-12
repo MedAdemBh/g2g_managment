@@ -74,6 +74,9 @@
 
   function fmtCurrency(val) {
     const num = parseFloat(val) || 0;
+    if (num === 0) return '$0.00';
+    if (num < 0.01) return `$${num.toFixed(4)}`;
+    if (num < 1 && (num * 100) % 1 !== 0) return `$${num.toFixed(3)}`;
     return `$${num.toFixed(2)}`;
   }
 
@@ -304,7 +307,7 @@
     }
     if (sub) {
       if (user.role === 'seller') {
-        sub.textContent = `G2G Store: ${user.g2gStoreName || 'Active'} • Custom Fee: ${user.commissionRate || 10}%`;
+        sub.textContent = `G2G Store: ${user.g2gStoreName || 'Active'}`;
       } else if (user.role === 'supplier') {
         sub.textContent = `Stock Supplier • Direct Payout Account`;
       } else {
@@ -313,16 +316,10 @@
     }
     if (balance) balance.textContent = fmtCurrency(user.balance);
 
-    // Fee Control Widget
+    // Fee Control Widget (hidden - no 10% fee added)
     const feeWidget = document.getElementById('sellerFeeControls');
-    const feeInput = document.getElementById('inputMyFeeRate');
-    if (feeWidget && feeInput) {
-      if (user.role === 'seller') {
-        feeWidget.style.display = 'flex';
-        feeInput.value = user.commissionRate || 10;
-      } else {
-        feeWidget.style.display = 'none';
-      }
+    if (feeWidget) {
+      feeWidget.style.display = 'none';
     }
   }
 
@@ -385,9 +382,9 @@
     if (emptyState) emptyState.style.display = 'none';
 
     container.innerHTML = availableItems.map(item => {
-      const sellerFeeRate = currentUser.role === 'seller' ? (currentUser.commissionRate || 10) : 10;
-      const sellerCut = item.supplierTargetPrice * (sellerFeeRate / 100);
-      const suggestedG2G = item.supplierTargetPrice + sellerCut;
+      const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+      const unitPrice = item.supplierTargetPrice || 0;
+      const totalPrice = unitPrice * qty;
 
       let actionButton = '';
       if (currentUser.role === 'seller' || currentUser.role === 'admin') {
@@ -399,7 +396,7 @@
       } else {
         actionButton = `
           <div style="font-size: 11px; color: var(--text-dim); text-align: center; padding: 6px;">
-            Your Offer: ${fmtCurrency(item.supplierTargetPrice)} (Waiting for Adem or Amine to take)
+            Your Offer: ${fmtCurrency(totalPrice)} (${qty > 1 ? `${qty}x @ ${fmtCurrency(unitPrice)}` : 'Waiting for seller'})
           </div>
         `;
       }
@@ -409,29 +406,30 @@
           <div class="card-top">
             <span class="game-badge">ARC RAIDERS</span>
             <span class="category-badge">${escapeHtml(item.category)}</span>
+            <span class="category-badge" style="background: rgba(0,240,255,0.15); color: var(--accent-cyan); font-weight: 700;">Qty: ${qty}x</span>
           </div>
 
           <h3 class="item-title">${escapeHtml(item.title)}</h3>
 
           <div class="price-box">
             <div class="price-item">
-              <div class="price-label">User Wants Payout</div>
-              <div class="price-val" style="color: #fff;">${fmtCurrency(item.supplierTargetPrice)}</div>
+              <div class="price-label">${qty > 1 ? 'Price (Per Unit)' : 'Item Price'}</div>
+              <div class="price-val" style="color: #fff;">${fmtCurrency(unitPrice)}</div>
             </div>
             <div class="price-item g2g-est">
-              <div class="price-label">Sell on G2G at (${sellerFeeRate}% fee)</div>
-              <div class="price-val">${fmtCurrency(suggestedG2G)}</div>
+              <div class="price-label">${qty > 1 ? `Total (${qty} Units)` : 'G2G Listing Price'}</div>
+              <div class="price-val" style="color: var(--accent-cyan);">${fmtCurrency(totalPrice)}</div>
             </div>
           </div>
 
           <div class="card-meta-list">
             <div class="meta-row">
-              <span>Offer by:</span>
+              <span>Deposited by:</span>
               <span class="val">${escapeHtml(item.supplierName)}</span>
             </div>
             <div class="meta-row">
-              <span>Your Seller Cut:</span>
-              <span class="val" style="color: var(--accent-green); font-weight: 700;">+${fmtCurrency(sellerCut)}</span>
+              <span>Quantity:</span>
+              <span class="val" style="color: var(--accent-gold); font-weight: 700;">${qty} pcs</span>
             </div>
             ${item.notes ? `
               <div class="meta-row" style="font-style: italic; color: var(--text-dim);">
@@ -524,11 +522,16 @@
         `;
       }
 
+      const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+      const unitPrice = item.supplierTargetPrice || 0;
+      const totalPrice = unitPrice * qty;
+
       return `
         <div class="item-card ${cardClass}">
           <div class="card-top">
             <span class="game-badge">${escapeHtml(item.game)}</span>
             <span class="category-badge">${escapeHtml(item.category)}</span>
+            <span class="category-badge" style="background: rgba(0,240,255,0.15); color: var(--accent-cyan); font-weight: 700;">Qty: ${qty}x</span>
           </div>
 
           <h3 class="item-title">${escapeHtml(item.title)}</h3>
@@ -537,12 +540,12 @@
 
           <div class="price-box">
             <div class="price-item">
-              <div class="price-label">Supplier Payout</div>
-              <div class="price-val">${fmtCurrency(item.supplierTargetPrice)}</div>
+              <div class="price-label">${qty > 1 ? 'Unit Price' : 'Price'}</div>
+              <div class="price-val">${fmtCurrency(unitPrice)}</div>
             </div>
             <div class="price-item g2g-est">
-              <div class="price-label">G2G Price</div>
-              <div class="price-val">${fmtCurrency(item.g2gListingPrice)}</div>
+              <div class="price-label">${qty > 1 ? `Total (${qty} Units)` : 'G2G Price'}</div>
+              <div class="price-val" style="color: var(--accent-cyan);">${fmtCurrency(totalPrice)}</div>
             </div>
           </div>
 
@@ -550,6 +553,10 @@
             <div class="meta-row">
               <span>Deposited by:</span>
               <span class="val">${escapeHtml(item.supplierName)}</span>
+            </div>
+            <div class="meta-row">
+              <span>Quantity:</span>
+              <span class="val" style="color: var(--accent-gold); font-weight: 700;">${qty} pcs</span>
             </div>
             <div class="meta-row">
               <span>Handling Seller:</span>
@@ -694,24 +701,32 @@
         if (soldEmpty) soldEmpty.style.display = 'block';
       } else {
         if (soldEmpty) soldEmpty.style.display = 'none';
-        soldGrid.innerHTML = soldItems.map(item => `
+        soldGrid.innerHTML = soldItems.map(item => {
+          const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+          const unitPrice = item.supplierTargetPrice || 0;
+          const totalPrice = unitPrice * qty;
+          return `
           <div class="item-card" style="border-color: rgba(0,245,155,0.3);">
             <div class="card-top">
               <span class="game-badge">${escapeHtml(item.game)}</span>
-              <span class="category-badge" style="background: rgba(0,245,155,0.1); color: var(--accent-green);">Sold</span>
+              <span class="category-badge" style="background: rgba(0,245,155,0.1); color: var(--accent-green);">Sold (${qty}x)</span>
             </div>
             <h3 class="item-title">${escapeHtml(item.title)}</h3>
             <div class="price-box">
               <div class="price-item">
-                <div class="price-label">Supplier Paid</div>
-                <div class="price-val">${fmtCurrency(item.supplierTargetPrice)}</div>
+                <div class="price-label">Price</div>
+                <div class="price-val">${fmtCurrency(totalPrice)}</div>
               </div>
               <div class="price-item profit">
                 <div class="price-label">Final G2G Sold</div>
-                <div class="price-val">${fmtCurrency(item.soldPrice)}</div>
+                <div class="price-val">${fmtCurrency(item.soldPrice || totalPrice)}</div>
               </div>
             </div>
             <div class="card-meta-list">
+              <div class="meta-row">
+                <span>Quantity:</span>
+                <span class="val" style="color: var(--accent-gold); font-weight: 700;">${qty} pcs</span>
+              </div>
               <div class="meta-row">
                 <span>Sold By:</span>
                 <span class="val">${escapeHtml(item.lockedBySellerName)}</span>
@@ -726,7 +741,8 @@
               </div>
             </div>
           </div>
-        `).join('');
+        `;
+        }).join('');
       }
     }
 
@@ -898,17 +914,16 @@
       if (soldBtn) {
         const item = appState.items.find(i => i.id === soldBtn.dataset.itemId);
         if (item) {
-          const user = getCurrentUser();
-          const feeRate = user.role === 'seller' ? (user.commissionRate || 10) : 10;
-          const initialFinalPrice = item.supplierTargetPrice * (1 + feeRate / 100);
-          const initialFeeCut = initialFinalPrice - item.supplierTargetPrice;
+          const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+          const unitPrice = item.supplierTargetPrice || 0;
+          const totalPrice = unitPrice * qty;
 
           document.getElementById('markSoldItemId').value = item.id;
-          document.getElementById('markSoldItemTitle').textContent = `ARC Raiders: ${item.title}`;
-          document.getElementById('markSoldSupplierPayout').value = fmtCurrency(item.supplierTargetPrice);
-          document.getElementById('markSoldFinalPrice').value = initialFinalPrice.toFixed(2);
+          document.getElementById('markSoldItemTitle').textContent = `ARC Raiders: ${item.title} (${qty}x)`;
+          document.getElementById('markSoldSupplierPayout').value = fmtCurrency(totalPrice);
+          document.getElementById('markSoldFinalPrice').value = totalPrice.toFixed(2);
           document.getElementById('markSoldOrderId').value = `G2G-ORD-${Math.floor(1000000 + Math.random() * 9000000)}`;
-          document.getElementById('markSoldProfitPreview').innerHTML = `Your Seller Fee Cut (${feeRate}%): <strong>${fmtCurrency(initialFeeCut)}</strong> will be credited to your balance.`;
+          document.getElementById('markSoldProfitPreview').innerHTML = `Final G2G Sale Price: <strong>${fmtCurrency(totalPrice)}</strong> (${qty} pcs). No 10% fee added.`;
           openModal('modalMarkSold');
         }
         return;
@@ -997,16 +1012,39 @@
             profitPreview.style.borderColor = 'rgba(0, 245, 155, 0.25)';
             profitPreview.style.background = 'rgba(0, 245, 155, 0.1)';
             profitPreview.style.color = 'var(--accent-green)';
-            profitPreview.innerHTML = `Your Seller Profit: <strong>${fmtCurrency(profit)}</strong> will be credited to your balance.`;
+            profitPreview.innerHTML = `Sale Price: <strong>${fmtCurrency(finalPrice)}</strong>. Seller Profit: <strong>${fmtCurrency(profit)}</strong>`;
           } else {
             profitPreview.style.borderColor = 'rgba(255, 51, 102, 0.25)';
             profitPreview.style.background = 'rgba(255, 51, 102, 0.1)';
             profitPreview.style.color = 'var(--accent-red)';
-            profitPreview.innerHTML = `⚠️ Loss: <strong>${fmtCurrency(profit)}</strong> — selling below supplier payout!`;
+            profitPreview.innerHTML = `⚠️ Selling below cost: <strong>${fmtCurrency(profit)}</strong>!`;
           }
         }
       });
     }
+
+    // Dynamic hint calculation in Deposit Modal
+    const addItemQtyInput = document.getElementById('addItemQuantity');
+    const addItemPriceInput = document.getElementById('addItemSupplierPrice');
+    const addItemHint = document.getElementById('addItemPriceCalcHint');
+
+    function updateAddItemCalcHint() {
+      if (!addItemHint) return;
+      const q = parseInt(addItemQtyInput?.value, 10) || 1;
+      const p = parseFloat(addItemPriceInput?.value) || 0;
+      if (p <= 0) {
+        addItemHint.textContent = 'Exact price — no 10% added.';
+        return;
+      }
+      if (q > 1) {
+        const total = q * p;
+        addItemHint.innerHTML = `Total Value: <strong>${fmtCurrency(total)}</strong> (${q} pcs × ${fmtCurrency(p)} each) • Exact price, no 10% added.`;
+      } else {
+        addItemHint.innerHTML = `Total Value: <strong>${fmtCurrency(p)}</strong> • Exact price, no 10% added.`;
+      }
+    }
+    if (addItemQtyInput) addItemQtyInput.addEventListener('input', updateAddItemCalcHint);
+    if (addItemPriceInput) addItemPriceInput.addEventListener('input', updateAddItemCalcHint);
 
     // Form Add Item (User makes an offer)
     const formAddItem = document.getElementById('formAddItem');
@@ -1014,11 +1052,13 @@
       formAddItem.addEventListener('submit', async (e) => {
         e.preventDefault();
         const user = getCurrentUser();
+        const qtyVal = parseInt(document.getElementById('addItemQuantity')?.value, 10) || 1;
         const body = {
           game: 'ARC Raiders',
           category: document.getElementById('addItemCategory').value,
           supplierId: document.getElementById('addItemSupplier').value,
           title: document.getElementById('addItemTitle').value.trim(),
+          quantity: Math.max(1, qtyVal),
           supplierTargetPrice: parseFloat(document.getElementById('addItemSupplierPrice').value),
           secretCredentials: document.getElementById('addItemCredentials').value.trim(),
           notes: document.getElementById('addItemNotes').value.trim(),
@@ -1034,6 +1074,7 @@
         if (data.success) {
           closeModal(document.getElementById('modalAddItem'));
           formAddItem.reset();
+          if (addItemHint) addItemHint.textContent = 'Exact price — no 10% added.';
           showToast('Offer posted! Adem or Amine can now take it to sell on G2G.', 'success');
         }
       });

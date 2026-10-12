@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>G2G StockNexus — ARC Raiders Management Portal</title>
   <meta name="description" content="Exclusive ARC Raiders inventory and anti-collision system for Adem, Amine, Aymen, and Hmayma.">
-  <link rel="stylesheet" href="css/style.css?v=20261012_03">
+  <link rel="stylesheet" href="css/style.css?v=20261012_04">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><text y=%2226%22 font-size=%2226%22>⚡</text></svg>">
 </head>
 <body>
@@ -47,12 +47,12 @@
         <div id="activeUserAvatar" class="avatar-circle">AD</div>
         <div>
           <div class="user-greeting">Active User: <strong id="activeUserName">Adem (Seller 1)</strong> <span id="activeUserRoleBadge" class="role-badge seller">SELLER</span></div>
-          <div class="user-meta-sub" id="activeUserSub">G2G Store: AdemVault_G2G • Seller Fee: 10%</div>
+          <div class="user-meta-sub" id="activeUserSub">G2G Store: AdemVault_G2G</div>
         </div>
       </div>
 
-      <!-- Seller Fee Control Pill (Each seller fixes their own fee) -->
-      <div id="sellerFeeControls" class="mini-kpi" style="border-color: rgba(0,240,255,0.4); display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 6px 12px;">
+      <!-- Seller Fee Control Pill (Hidden - direct exact pricing) -->
+      <div id="sellerFeeControls" class="mini-kpi" style="border-color: rgba(0,240,255,0.4); display: none; flex-direction: row; align-items: center; gap: 8px; padding: 6px 12px;">
         <div style="display:flex; flex-direction:column;">
           <span class="kpi-title" style="white-space: nowrap; font-size: 10px;">My Seller Fee %</span>
           <span style="font-size: 10px; color: var(--text-dim);">(Your custom cut)</span>
@@ -596,10 +596,17 @@
           <datalist id="catalogItemPresets"></datalist>
         </div>
 
-        <div class="form-group">
-          <label>Guaranteed Payout You Want ($) *</label>
-          <input type="number" step="0.01" id="addItemSupplierPrice" class="form-control" placeholder="e.g. 35.00" required style="font-size: 16px; font-weight: 700; color: #fff;">
-          <small style="color: var(--accent-green); font-size: 11px;">You receive 100% of this amount when Adem or Amine sells your item.</small>
+        <div class="form-row">
+          <div class="form-group" style="flex: 1;">
+            <label>Quantity *</label>
+            <input type="number" id="addItemQuantity" class="form-control" min="1" step="1" value="1" required style="font-size: 16px; font-weight: 700; color: #fff;">
+            <small style="color: var(--text-dim); font-size: 11px;">Units (e.g. 1, 5, 10)</small>
+          </div>
+          <div class="form-group" style="flex: 2;">
+            <label>Item Price ($) *</label>
+            <input type="number" step="any" id="addItemSupplierPrice" class="form-control" placeholder="e.g. 0.07 or 35.00" required style="font-size: 16px; font-weight: 700; color: #fff;">
+            <small id="addItemPriceCalcHint" style="color: var(--accent-green); font-size: 11px;">Exact price — no 10% added.</small>
+          </div>
         </div>
 
         <div class="form-group">
@@ -674,12 +681,12 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label>User Payout Guaranteed ($)</label>
+            <label>Item Price / Payout ($)</label>
             <input type="text" id="markSoldSupplierPayout" class="form-control" readonly style="opacity: 0.85; font-weight: 700; color: #fff;">
           </div>
           <div class="form-group">
             <label>Final Price on G2G ($) *</label>
-            <input type="number" step="0.01" id="markSoldFinalPrice" class="form-control" required style="font-weight: 700; color: var(--accent-cyan);">
+            <input type="number" step="any" id="markSoldFinalPrice" class="form-control" required style="font-weight: 700; color: var(--accent-cyan);">
           </div>
         </div>
 
@@ -689,7 +696,7 @@
         </div>
 
         <div id="markSoldProfitPreview" style="background: rgba(0, 245, 155, 0.1); border: 1px solid rgba(0, 245, 155, 0.25); border-radius: var(--radius-sm); padding: 12px; font-size: 13px; color: var(--accent-green); margin-bottom: 16px;">
-          Your Seller Fee Cut: <strong>$0.00</strong> will be credited to your balance.
+          Final G2G Sale Price: <strong>$0.00</strong>. Exact price — no 10% added.
         </div>
 
         <div style="display: flex; justify-content: flex-end; gap: 10px;">
@@ -810,6 +817,6 @@
   <div id="toastContainer" class="toast-container"></div>
 
   <!-- Main Application Script -->
-  <script src="js/app.js?v=20261012_03"></script>
+  <script src="js/app.js?v=20261012_04"></script>
 </body>
 </html>

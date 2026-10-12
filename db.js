@@ -16,6 +16,7 @@ const ItemSchema = new mongoose.Schema({
   title: { type: String, required: true },
   game: { type: String, default: 'ARC Raiders' },
   category: { type: String, required: true },
+  quantity: { type: Number, default: 1 },
   supplierId: { type: String, required: true },
   supplierName: String,
   supplierTargetPrice: { type: Number, required: true },
