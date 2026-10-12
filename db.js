@@ -19,7 +19,7 @@ const ItemSchema = new mongoose.Schema({
   quantity: { type: Number, default: 1 },
   supplierId: { type: String, required: true },
   supplierName: String,
-  supplierTargetPrice: { type: Number, required: true },
+  supplierTargetPrice: { type: Number, default: 0 },
   g2gListingPrice: { type: Number, default: 0 },
   status: { type: String, default: 'available' }, // 'available' | 'locked_by_seller' | 'sold'
   lockedBySellerId: { type: String, default: null },

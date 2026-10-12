@@ -71,15 +71,6 @@ const getInitialSeedData = () => {
         balance: 0.00,
         avatarColor: '#8b5cf6'
       },
-      {
-        id: 'usr_admin',
-        name: 'Admin (Manager)',
-        role: 'admin',
-        g2gStoreName: 'Main Store Operations',
-        commissionRate: 0,
-        balance: 0.00,
-        avatarColor: '#ec4899'
-      }
     ],
     items: [],
     withdrawals: [],
@@ -401,7 +392,7 @@ app.post('/api/users', async (req, res) => {
     saveData(store);
   }
 
-  await logActivity('USER_ADDED', 'System / Admin', `Added new ${role.toUpperCase()}: ${newUser.name}`);
+  await logActivity('USER_ADDED', 'System', `Added new ${role.toUpperCase()}: ${newUser.name}`);
   await broadcastUpdate('USER_ADDED', `New user added: ${newUser.name}`, 'System');
   res.json({ success: true, user: newUser });
 });
@@ -419,7 +410,7 @@ app.post('/api/items', async (req, res) => {
     createdByName
   } = req.body;
 
-  if (!title || !category || !supplierId || !supplierTargetPrice) {
+  if (!title || !category || !supplierId) {
     return res.status(400).json({ success: false, error: 'Missing required item fields' });
   }
 
@@ -454,7 +445,7 @@ app.post('/api/items', async (req, res) => {
     g2gOrderId: '',
     soldPrice: null,
     soldAt: null,
-    secretCredentials: secretCredentials || 'No credentials supplied',
+    secretCredentials: secretCredentials || '',
     notes: notes || '',
     createdAt: new Date().toISOString()
   };
@@ -467,15 +458,15 @@ app.post('/api/items', async (req, res) => {
     saveData(store);
   }
 
-  await logActivity('ITEM_CREATED', createdByName || supplierName, `Offer added: "${newItem.title}" [${newItem.category}] — User wants $${sPrice.toFixed(2)}`);
-  await broadcastUpdate('ITEM_CREATED', `New offer from ${supplierName}: "${newItem.title}" ($${sPrice.toFixed(2)})`, createdByName || supplierName);
+  await logActivity('ITEM_CREATED', createdByName || supplierName, `Offer added: "${newItem.title}" (${qty} pcs) by ${supplierName}. Awaiting seller price.`);
+  await broadcastUpdate('ITEM_CREATED', `New offer: "${newItem.title}" (${qty} pcs) by ${supplierName}`, createdByName || supplierName);
   res.json({ success: true, item: newItem });
 });
 
-// 4. Seller locks item (Anti-collision)
+// 4. Seller locks item & sets price (Anti-collision)
 app.post('/api/items/:id/claim', async (req, res) => {
   const { id } = req.params;
-  const { sellerId, sellerName } = req.body;
+  const { sellerId, sellerName, price } = req.body;
 
   if (!sellerId || !sellerName) {
     return res.status(400).json({ success: false, error: 'Seller identification required' });
@@ -513,14 +504,55 @@ app.post('/api/items/:id/claim', async (req, res) => {
   item.lockedBySellerName = sellerName;
   item.lockedAt = new Date().toISOString();
 
+  if (price !== undefined && price !== null && !isNaN(parseFloat(price))) {
+    const parsedPrice = parseFloat(price);
+    item.supplierTargetPrice = parsedPrice;
+    item.g2gListingPrice = parsedPrice;
+  }
+
   if (process.env.MONGODB_URI) {
     await item.save();
   } else {
     saveData(store);
   }
 
-  await logActivity('CLAIMED_FOR_G2G', sellerName, `🔒 ${sellerName} took "${item.title}" to sell on G2G. Other seller is blocked.`);
-  await broadcastUpdate('CLAIMED_FOR_G2G', `🔒 "${item.title}" taken by ${sellerName} to sell on G2G`, sellerName);
+  const priceMsg = item.supplierTargetPrice > 0 ? ` at $${item.supplierTargetPrice.toFixed(2)}/unit` : '';
+  await logActivity('CLAIMED_FOR_G2G', sellerName, `🔒 ${sellerName} took "${item.title}" (${item.quantity || 1}x)${priceMsg} to sell on G2G.`);
+  await broadcastUpdate('CLAIMED_FOR_G2G', `🔒 "${item.title}" taken by ${sellerName} to sell on G2G${priceMsg}`, sellerName);
+  res.json({ success: true, item });
+});
+
+// 4.1 Seller updates price of an item
+app.post('/api/items/:id/price', async (req, res) => {
+  const { id } = req.params;
+  const { price, sellerId } = req.body;
+  const parsedPrice = parseFloat(price);
+  if (isNaN(parsedPrice) || parsedPrice < 0) {
+    return res.status(400).json({ success: false, error: 'Invalid price' });
+  }
+
+  let item = null;
+  if (process.env.MONGODB_URI) {
+    await connectDB();
+    item = await Item.findOne({ id });
+  } else {
+    item = store.items.find((i) => i.id === id);
+  }
+
+  if (!item) {
+    return res.status(404).json({ success: false, error: 'Item not found' });
+  }
+
+  item.supplierTargetPrice = parsedPrice;
+  item.g2gListingPrice = parsedPrice;
+
+  if (process.env.MONGODB_URI) {
+    await item.save();
+  } else {
+    saveData(store);
+  }
+
+  await broadcastUpdate('PRICE_UPDATED', `Price for "${item.title}" updated to $${parsedPrice.toFixed(2)}`, item.lockedBySellerName || 'Seller');
   res.json({ success: true, item });
 });
 
@@ -559,17 +591,36 @@ app.post('/api/items/:id/release', async (req, res) => {
   res.json({ success: true, item });
 });
 
-// Delete item
+// Delete item (supplier can only delete their own available item)
 app.delete('/api/items/:id', async (req, res) => {
   const { id } = req.params;
+  const requesterId = req.query.requesterId || (req.body && req.body.requesterId);
+
+  let item = null;
   if (process.env.MONGODB_URI) {
     await connectDB();
+    item = await Item.findOne({ id }).lean();
+  } else {
+    item = store.items.find((i) => i.id === id);
+  }
+
+  if (!item) return res.status(404).json({ success: false, error: 'Item not found' });
+
+  // Only the supplier who deposited the item can delete it, and only while it's still available
+  if (item.supplierId !== requesterId) {
+    return res.status(403).json({ success: false, error: 'You can only delete your own deposited items.' });
+  }
+  if (item.status !== 'available') {
+    return res.status(400).json({ success: false, error: 'Cannot delete an item that has already been taken or sold.' });
+  }
+
+  if (process.env.MONGODB_URI) {
     await Item.deleteOne({ id });
   } else {
     store.items = store.items.filter((i) => i.id !== id);
     saveData(store);
   }
-  await broadcastUpdate('ITEM_DELETED', `Item removed from pool`, 'System');
+  await broadcastUpdate('ITEM_DELETED', `Item "${item.title}" removed by supplier`, item.supplierName);
   res.json({ success: true });
 });
 
@@ -718,26 +769,7 @@ app.get('/api/withdrawals', async (req, res) => {
   res.json({ success: true, withdrawals: store.withdrawals || [] });
 });
 
-// 8. Delete item
-app.delete('/api/items/:id', async (req, res) => {
-  const { id } = req.params;
-  if (process.env.MONGODB_URI) {
-    await connectDB();
-    const deleted = await Item.findOneAndDelete({ id });
-    if (!deleted) return res.status(404).json({ success: false, error: 'Item not found' });
-    await logActivity('ITEM_DELETED', 'Admin/User', `Deleted stock item "${deleted.title}"`);
-    await broadcastUpdate('ITEM_DELETED', `Stock item "${deleted.title}" was removed`, 'Admin');
-    return res.json({ success: true });
-  } else {
-    const idx = store.items.findIndex((i) => i.id === id);
-    if (idx === -1) return res.status(404).json({ success: false, error: 'Item not found' });
-    const deleted = store.items.splice(idx, 1)[0];
-    await logActivity('ITEM_DELETED', 'Admin/User', `Deleted stock item "${deleted.title}"`);
-    saveData(store);
-    await broadcastUpdate('ITEM_DELETED', `Stock item "${deleted.title}" was removed`, 'Admin');
-    return res.json({ success: true });
-  }
-});
+
 
 // 9. Reset Demo Data
 app.post('/api/reset-demo', async (req, res) => {
@@ -751,12 +783,12 @@ app.post('/api/reset-demo', async (req, res) => {
       ActivityLog.deleteMany({})
     ]);
     await User.insertMany(seed.users);
-    await broadcastUpdate('SYSTEM_RESET', 'Data has been reset to defaults', 'Admin');
+    await broadcastUpdate('SYSTEM_RESET', 'Data has been reset to defaults', 'System');
     return res.json({ success: true, message: 'Reset successful', data: seed });
   } else {
     store = seed;
     saveData(store);
-    await broadcastUpdate('SYSTEM_RESET', 'Data has been reset to defaults', 'Admin');
+    await broadcastUpdate('SYSTEM_RESET', 'Data has been reset to defaults', 'System');
     return res.json({ success: true, message: 'Reset successful', data: store });
   }
 });

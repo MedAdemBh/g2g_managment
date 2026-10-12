@@ -3,7 +3,6 @@
     {
       "id": "usr_seller_adem",
       "name": "Adem (Seller 1)",
-      "email": "adem.seller@g2g.com",
       "role": "seller",
       "g2gStoreName": "AdemVault_G2G",
       "commissionRate": 10,
@@ -13,7 +12,6 @@
     {
       "id": "usr_seller_amine",
       "name": "Amine (Seller 2)",
-      "email": "amine.seller@g2g.com",
       "role": "seller",
       "g2gStoreName": "AmineMarket_G2G",
       "commissionRate": 10,
@@ -23,7 +21,6 @@
     {
       "id": "usr_supplier_aymen",
       "name": "Aymen (User / Supplier)",
-      "email": "aymen.user@mail.com",
       "role": "supplier",
       "g2gStoreName": "",
       "commissionRate": 0,
@@ -33,22 +30,11 @@
     {
       "id": "usr_supplier_hmayma",
       "name": "Hmayma (User / Supplier)",
-      "email": "hmayma.user@mail.com",
       "role": "supplier",
       "g2gStoreName": "",
       "commissionRate": 0,
       "balance": 0,
       "avatarColor": "#8b5cf6"
-    },
-    {
-      "id": "usr_admin",
-      "name": "Admin (Manager)",
-      "email": "admin@g2ghub.com",
-      "role": "admin",
-      "g2gStoreName": "Main Store Operations",
-      "commissionRate": 0,
-      "balance": 0,
-      "avatarColor": "#ec4899"
     }
   ],
   "items": [],

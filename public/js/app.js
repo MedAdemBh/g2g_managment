@@ -308,10 +308,8 @@
     if (sub) {
       if (user.role === 'seller') {
         sub.textContent = `G2G Store: ${user.g2gStoreName || 'Active'}`;
-      } else if (user.role === 'supplier') {
-        sub.textContent = `Stock Supplier • Direct Payout Account`;
       } else {
-        sub.textContent = `Administrator • Full Control`;
+        sub.textContent = `Stock Supplier • Direct Payout Account`;
       }
     }
     if (balance) balance.textContent = fmtCurrency(user.balance);
@@ -386,20 +384,51 @@
       const unitPrice = item.supplierTargetPrice || 0;
       const totalPrice = unitPrice * qty;
 
+      const isMyDeposit = item.supplierId === currentUser.id;
+
+      const deleteButtonHtml = (isMyDeposit && item.status === 'available') ? `
+        <button class="btn btn-danger btn-sm" data-action="delete-item" data-item-id="${item.id}" style="width: 100%; margin-top: 6px; font-size: 11px;">
+          <span>🗑️</span> Remove My Deposit
+        </button>
+      ` : '';
+
       let actionButton = '';
-      if (currentUser.role === 'seller' || currentUser.role === 'admin') {
+      if (currentUser.role === 'seller') {
         actionButton = `
-          <button class="btn btn-primary" data-action="claim" data-item-id="${item.id}" style="width: 100%;">
-            <span>⚡</span> Take to Sell on G2G
+          <button class="btn btn-primary" data-action="claim-modal" data-item-id="${item.id}" style="width: 100%;">
+            <span>⚡</span> Set Price & Take to Sell
           </button>
+          ${deleteButtonHtml}
         `;
       } else {
+        // Supplier view: show deposit info + delete if it's their own
         actionButton = `
           <div style="font-size: 11px; color: var(--text-dim); text-align: center; padding: 6px;">
-            Your Offer: ${fmtCurrency(totalPrice)} (${qty > 1 ? `${qty}x @ ${fmtCurrency(unitPrice)}` : 'Waiting for seller'})
+            ${isMyDeposit ? `Your Deposit: ${qty} pcs (Waiting for seller to take & set price)` : `Deposited by: ${escapeHtml(item.supplierName)}`}
           </div>
+          ${deleteButtonHtml}
         `;
       }
+
+      const priceHtml = unitPrice > 0 ? `
+        <div class="price-box">
+          <div class="price-item">
+            <div class="price-label">${qty > 1 ? 'Price (Per Unit)' : 'Item Price'}</div>
+            <div class="price-val" style="color: #fff;">${fmtCurrency(unitPrice)}</div>
+          </div>
+          <div class="price-item g2g-est">
+            <div class="price-label">${qty > 1 ? `Total (${qty} Units)` : 'G2G Listing Price'}</div>
+            <div class="price-val" style="color: var(--accent-cyan);">${fmtCurrency(totalPrice)}</div>
+          </div>
+        </div>
+      ` : `
+        <div class="price-box" style="background: rgba(255, 183, 3, 0.08); border: 1px dashed rgba(255, 183, 3, 0.3);">
+          <div class="price-item" style="flex: 2;">
+            <div class="price-label">G2G Price</div>
+            <div class="price-val" style="color: var(--accent-gold); font-size: 13px; font-weight: 700;">⏳ To be priced by seller</div>
+          </div>
+        </div>
+      `;
 
       return `
         <div class="item-card">
@@ -411,16 +440,7 @@
 
           <h3 class="item-title">${escapeHtml(item.title)}</h3>
 
-          <div class="price-box">
-            <div class="price-item">
-              <div class="price-label">${qty > 1 ? 'Price (Per Unit)' : 'Item Price'}</div>
-              <div class="price-val" style="color: #fff;">${fmtCurrency(unitPrice)}</div>
-            </div>
-            <div class="price-item g2g-est">
-              <div class="price-label">${qty > 1 ? `Total (${qty} Units)` : 'G2G Listing Price'}</div>
-              <div class="price-val" style="color: var(--accent-cyan);">${fmtCurrency(totalPrice)}</div>
-            </div>
-          </div>
+          ${priceHtml}
 
           <div class="card-meta-list">
             <div class="meta-row">
@@ -431,12 +451,6 @@
               <span>Quantity:</span>
               <span class="val" style="color: var(--accent-gold); font-weight: 700;">${qty} pcs</span>
             </div>
-            ${item.notes ? `
-              <div class="meta-row" style="font-style: italic; color: var(--text-dim);">
-                <span>Notes:</span>
-                <span class="val">${escapeHtml(item.notes)}</span>
-              </div>
-            ` : ''}
           </div>
 
           <div class="card-actions">
@@ -509,11 +523,11 @@
         `;
         actionsHtml = `
           <div class="action-row">
-            <button class="btn btn-success" data-action="mark-sold-modal" data-item-id="${item.id}">
-              <span>🎉</span> Mark Sold
+            <button class="btn btn-outline-cyan btn-sm" data-action="edit-price-modal" data-item-id="${item.id}" style="flex: 1;">
+              <span>✏️</span> Set/Edit Price
             </button>
-            <button class="btn btn-secondary" data-action="view-creds" data-item-id="${item.id}">
-              <span>🔐</span> Delivery Info
+            <button class="btn btn-success btn-sm" data-action="mark-sold-modal" data-item-id="${item.id}" style="flex: 1;">
+              <span>🎉</span> Mark Sold
             </button>
           </div>
           <button class="btn btn-danger btn-sm" data-action="release" data-item-id="${item.id}" style="margin-top: 6px;" title="Leave this item for another seller">
@@ -525,6 +539,26 @@
       const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
       const unitPrice = item.supplierTargetPrice || 0;
       const totalPrice = unitPrice * qty;
+
+      const priceHtml = unitPrice > 0 ? `
+        <div class="price-box">
+          <div class="price-item">
+            <div class="price-label">${qty > 1 ? 'Unit Price' : 'Price'}</div>
+            <div class="price-val">${fmtCurrency(unitPrice)}</div>
+          </div>
+          <div class="price-item g2g-est">
+            <div class="price-label">${qty > 1 ? `Total (${qty} Units)` : 'G2G Price'}</div>
+            <div class="price-val" style="color: var(--accent-cyan);">${fmtCurrency(totalPrice)}</div>
+          </div>
+        </div>
+      ` : `
+        <div class="price-box" style="background: rgba(255, 183, 3, 0.08); border: 1px dashed rgba(255, 183, 3, 0.3);">
+          <div class="price-item" style="flex: 2;">
+            <div class="price-label">G2G Price</div>
+            <div class="price-val" style="color: var(--accent-gold); font-size: 13px; font-weight: 700;">Click "Set/Edit Price" below</div>
+          </div>
+        </div>
+      `;
 
       return `
         <div class="item-card ${cardClass}">
@@ -538,16 +572,7 @@
 
           ${bannerHtml}
 
-          <div class="price-box">
-            <div class="price-item">
-              <div class="price-label">${qty > 1 ? 'Unit Price' : 'Price'}</div>
-              <div class="price-val">${fmtCurrency(unitPrice)}</div>
-            </div>
-            <div class="price-item g2g-est">
-              <div class="price-label">${qty > 1 ? `Total (${qty} Units)` : 'G2G Price'}</div>
-              <div class="price-val" style="color: var(--accent-cyan);">${fmtCurrency(totalPrice)}</div>
-            </div>
-          </div>
+          ${priceHtml}
 
           <div class="card-meta-list">
             <div class="meta-row">
@@ -588,7 +613,7 @@
     // Team Cards
     cardsContainer.innerHTML = (appState.users || []).map(u => {
       const isCurrent = u.id === currentUserId;
-      let roleDesc = u.role === 'seller' ? 'G2G Store Seller' : u.role === 'supplier' ? 'Stock Supplier / User' : 'Admin';
+      let roleDesc = u.role === 'seller' ? 'G2G Store Seller' : 'Stock Supplier / User';
       let feeInfo = u.role === 'seller' ? `<div style="font-size: 11px; color: var(--accent-cyan); margin-top: 4px;">Custom Fee: ${u.commissionRate || 10}%</div>` : '';
       return `
         <div class="team-card" ${isCurrent ? 'style="border-color: var(--accent-cyan);"' : ''}>
@@ -826,6 +851,28 @@
     }
   }
 
+  async function deleteItem(itemId) {
+    const user = getCurrentUser();
+    try {
+      const res = await fetch(`/api/items/${itemId}?requesterId=${encodeURIComponent(user.id)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (data.success) {
+        appState.items = (appState.items || []).filter(i => i.id !== itemId);
+        renderAll();
+        showToast('Your deposit has been removed.', 'success');
+        await fetchState();
+      } else {
+        showToast(data.error || 'Could not delete item.', 'warning');
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('Network error removing item.', 'warning');
+    }
+  }
+
   // Modal helpers
   function openModal(id) {
     const m = document.getElementById(id);
@@ -886,10 +933,37 @@
         return;
       }
 
-      // Claim action
-      const claimBtn = e.target.closest('button[data-action="claim"]');
+      // Claim / Take to sell action (opens Set Price modal)
+      const claimBtn = e.target.closest('button[data-action="claim"], button[data-action="claim-modal"]');
       if (claimBtn) {
-        claimItem(claimBtn.dataset.itemId);
+        const item = appState.items.find(i => i.id === claimBtn.dataset.itemId);
+        if (item) {
+          const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+          document.getElementById('claimItemId').value = item.id;
+          document.getElementById('claimItemTitle').textContent = `ARC Raiders: ${item.title}`;
+          document.getElementById('claimItemQty').textContent = qty;
+          document.getElementById('claimItemSupplier').textContent = item.supplierName || 'User';
+          const priceInput = document.getElementById('claimItemPrice');
+          if (priceInput) priceInput.value = item.supplierTargetPrice > 0 ? item.supplierTargetPrice : '';
+          updateClaimPriceHint();
+          openModal('modalClaimItem');
+        }
+        return;
+      }
+
+      // Edit price modal
+      const editPriceBtn = e.target.closest('button[data-action="edit-price-modal"]');
+      if (editPriceBtn) {
+        const item = appState.items.find(i => i.id === editPriceBtn.dataset.itemId);
+        if (item) {
+          const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+          document.getElementById('editPriceItemId').value = item.id;
+          document.getElementById('editPriceItemTitle').textContent = `ARC Raiders: ${item.title} (${qty} pcs)`;
+          const priceInput = document.getElementById('editPriceValue');
+          if (priceInput) priceInput.value = item.supplierTargetPrice || '';
+          updateEditPriceHint();
+          openModal('modalEditPrice');
+        }
         return;
       }
 
@@ -898,6 +972,15 @@
       if (releaseBtn) {
         if (confirm('Leave this item for another seller? It will be released so another seller can take it immediately.')) {
           releaseItem(releaseBtn.dataset.itemId);
+        }
+        return;
+      }
+
+      // Delete item (supplier removes their own deposit)
+      const deleteBtn = e.target.closest('button[data-action="delete-item"]');
+      if (deleteBtn) {
+        if (confirm('Remove this deposit? This cannot be undone.')) {
+          deleteItem(deleteBtn.dataset.itemId);
         }
         return;
       }
@@ -956,10 +1039,18 @@
     });
 
     // Open Add Item Modal buttons
+    function openDepositModal() {
+      updateModalSuppliers();
+      const select = document.getElementById('addItemSupplier');
+      if (select && currentUserId) {
+        select.value = currentUserId;
+      }
+      openModal('modalAddItem');
+    }
     const btnOpenAdd = document.getElementById('btnOpenAddItem');
     const btnDepositDirect = document.getElementById('btnDepositItemDirect');
-    if (btnOpenAdd) btnOpenAdd.addEventListener('click', () => openModal('modalAddItem'));
-    if (btnDepositDirect) btnDepositDirect.addEventListener('click', () => openModal('modalAddItem'));
+    if (btnOpenAdd) btnOpenAdd.addEventListener('click', openDepositModal);
+    if (btnDepositDirect) btnDepositDirect.addEventListener('click', openDepositModal);
 
     // Open Add User Modal
     const btnOpenAddUser = document.getElementById('btnOpenAddUser');
@@ -1023,30 +1114,117 @@
       });
     }
 
-    // Dynamic hint calculation in Deposit Modal
-    const addItemQtyInput = document.getElementById('addItemQuantity');
-    const addItemPriceInput = document.getElementById('addItemSupplierPrice');
-    const addItemHint = document.getElementById('addItemPriceCalcHint');
-
-    function updateAddItemCalcHint() {
-      if (!addItemHint) return;
-      const q = parseInt(addItemQtyInput?.value, 10) || 1;
-      const p = parseFloat(addItemPriceInput?.value) || 0;
-      if (p <= 0) {
-        addItemHint.textContent = 'Exact price — no 10% added.';
-        return;
-      }
-      if (q > 1) {
-        const total = q * p;
-        addItemHint.innerHTML = `Total Value: <strong>${fmtCurrency(total)}</strong> (${q} pcs × ${fmtCurrency(p)} each) • Exact price, no 10% added.`;
+    // Form Claim Item (Seller takes & sets price)
+    const formClaimItem = document.getElementById('formClaimItem');
+    const claimPriceInput = document.getElementById('claimItemPrice');
+    function updateClaimPriceHint() {
+      const hint = document.getElementById('claimItemPriceHint');
+      const priceVal = parseFloat(claimPriceInput?.value) || 0;
+      const qtyVal = parseInt(document.getElementById('claimItemQty')?.textContent, 10) || 1;
+      if (!hint) return;
+      if (priceVal > 0) {
+        if (qtyVal > 1) {
+          hint.innerHTML = `Total Listing Price: <strong>${fmtCurrency(priceVal * qtyVal)}</strong> (${qtyVal} pcs × ${fmtCurrency(priceVal)} each). No 10% added.`;
+        } else {
+          hint.innerHTML = `Listing Price: <strong>${fmtCurrency(priceVal)}</strong>. Direct price, no 10% added.`;
+        }
       } else {
-        addItemHint.innerHTML = `Total Value: <strong>${fmtCurrency(p)}</strong> • Exact price, no 10% added.`;
+        hint.textContent = 'Direct listing price — no 10% added.';
       }
     }
-    if (addItemQtyInput) addItemQtyInput.addEventListener('input', updateAddItemCalcHint);
-    if (addItemPriceInput) addItemPriceInput.addEventListener('input', updateAddItemCalcHint);
+    if (claimPriceInput) claimPriceInput.addEventListener('input', updateClaimPriceHint);
 
-    // Form Add Item (User makes an offer)
+    if (formClaimItem) {
+      formClaimItem.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const user = getCurrentUser();
+        const itemId = document.getElementById('claimItemId').value;
+        const priceVal = parseFloat(claimPriceInput.value) || 0;
+
+        try {
+          const res = await fetch(`/api/items/${itemId}/claim`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sellerId: user.id,
+              sellerName: user.name,
+              price: priceVal
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            closeModal(document.getElementById('modalClaimItem'));
+            showToast(`Claimed! Set price to ${fmtCurrency(priceVal)}. Ready on G2G.`, 'success');
+            playNotification('lock');
+          } else {
+            showToast(data.error || 'Failed to claim item', 'warning');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast('Network error claiming item', 'warning');
+        }
+      });
+    }
+
+    // Check radar button from Claim Modal
+    const btnClaimCheckRadar = document.getElementById('btnClaimCheckRadar');
+    if (btnClaimCheckRadar) {
+      btnClaimCheckRadar.addEventListener('click', () => {
+        const itemId = document.getElementById('claimItemId').value;
+        const item = appState.items.find(i => i.id === itemId);
+        if (item) {
+          closeModal(document.getElementById('modalClaimItem'));
+          switchToRadarTabAndScan(item.title);
+        }
+      });
+    }
+
+    // Form Edit Price (Seller updates price anytime)
+    const formEditPrice = document.getElementById('formEditPrice');
+    const editPriceInput = document.getElementById('editPriceValue');
+    function updateEditPriceHint() {
+      const hint = document.getElementById('editPriceHint');
+      const priceVal = parseFloat(editPriceInput?.value) || 0;
+      if (!hint) return;
+      if (priceVal > 0) {
+        hint.innerHTML = `New Listing Price: <strong>${fmtCurrency(priceVal)}</strong>. Direct price, no 10% added.`;
+      } else {
+        hint.textContent = 'Direct price — no 10% added.';
+      }
+    }
+    if (editPriceInput) editPriceInput.addEventListener('input', updateEditPriceHint);
+
+    if (formEditPrice) {
+      formEditPrice.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const user = getCurrentUser();
+        const itemId = document.getElementById('editPriceItemId').value;
+        const priceVal = parseFloat(editPriceInput.value) || 0;
+
+        try {
+          const res = await fetch(`/api/items/${itemId}/price`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sellerId: user.id,
+              price: priceVal
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            closeModal(document.getElementById('modalEditPrice'));
+            showToast(`Price updated to ${fmtCurrency(priceVal)}.`, 'success');
+          } else {
+            showToast(data.error || 'Failed to update price', 'warning');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast('Network error updating price', 'warning');
+        }
+      });
+    }
+
+    // Form Add Item (User deposits item - only item & quantity)
     const formAddItem = document.getElementById('formAddItem');
     if (formAddItem) {
       formAddItem.addEventListener('submit', async (e) => {
@@ -1059,9 +1237,6 @@
           supplierId: document.getElementById('addItemSupplier').value,
           title: document.getElementById('addItemTitle').value.trim(),
           quantity: Math.max(1, qtyVal),
-          supplierTargetPrice: parseFloat(document.getElementById('addItemSupplierPrice').value),
-          secretCredentials: document.getElementById('addItemCredentials').value.trim(),
-          notes: document.getElementById('addItemNotes').value.trim(),
           createdByName: user.name
         };
 
@@ -1074,8 +1249,7 @@
         if (data.success) {
           closeModal(document.getElementById('modalAddItem'));
           formAddItem.reset();
-          if (addItemHint) addItemHint.textContent = 'Exact price — no 10% added.';
-          showToast('Offer posted! Adem or Amine can now take it to sell on G2G.', 'success');
+          showToast('Item deposited! Adem or Amine will set the price when taking it.', 'success');
         }
       });
     }
