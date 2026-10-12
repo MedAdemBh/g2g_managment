@@ -18,6 +18,53 @@
   let poolGameFilter = '';
   let socket = null;
   let wsReconnectTimer = null;
+  let currentProofBase64 = '';
+
+  function compressImage(file, maxWidth = 1280, maxHeight = 1280, quality = 0.8) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => resolve(e.target.result);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function setProofImage(base64Data) {
+    currentProofBase64 = base64Data || '';
+    const placeholder = document.getElementById('proofPlaceholder');
+    const previewContainer = document.getElementById('proofPreviewContainer');
+    const previewImg = document.getElementById('proofPreviewImg');
+    const fileInput = document.getElementById('markSoldProofFile');
+    if (base64Data) {
+      if (previewImg) previewImg.src = base64Data;
+      if (placeholder) placeholder.style.display = 'none';
+      if (previewContainer) previewContainer.style.display = 'block';
+    } else {
+      if (previewImg) previewImg.src = '';
+      if (placeholder) placeholder.style.display = 'block';
+      if (previewContainer) previewContainer.style.display = 'none';
+      if (fileInput) fileInput.value = '';
+    }
+  }
 
   // Audio Notifications
   let audioCtx = null;
@@ -314,6 +361,23 @@
     }
     if (balance) balance.textContent = fmtCurrency(user.balance);
 
+    // Active User Seller Breakdown (Adem, Amine, etc.)
+    const sellerBreakdownEl = document.getElementById('activeUserSellerBreakdown');
+    if (sellerBreakdownEl) {
+      if (user.role === 'supplier') {
+        const sellers = (appState.users || []).filter(u => u.role === 'seller');
+        const breakdownHtml = sellers.map(s => {
+          const sBal = (user.sellerBalances && user.sellerBalances[s.id]) || 0;
+          const shortName = s.name.split(' ')[0];
+          return `<span style="display: inline-block; background: rgba(0,240,255,0.06); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(0,240,255,0.15); margin-right: 4px; margin-top: 2px;">${shortName}: <strong style="color: ${sBal > 0 ? 'var(--accent-green)' : 'var(--text-dim)'};">${fmtCurrency(sBal)}</strong></span>`;
+        }).join('');
+        sellerBreakdownEl.innerHTML = `<div style="color: var(--text-dim); font-size: 10px; margin-bottom: 2px;">From Sellers:</div>${breakdownHtml}`;
+        sellerBreakdownEl.style.display = 'block';
+      } else {
+        sellerBreakdownEl.style.display = 'none';
+      }
+    }
+
     // Fee Control Widget (hidden - no 10% fee added)
     const feeWidget = document.getElementById('sellerFeeControls');
     if (feeWidget) {
@@ -386,10 +450,15 @@
 
       const isMyDeposit = item.supplierId === currentUser.id;
 
-      const deleteButtonHtml = (isMyDeposit && item.status === 'available') ? `
-        <button class="btn btn-danger btn-sm" data-action="delete-item" data-item-id="${item.id}" style="width: 100%; margin-top: 6px; font-size: 11px;">
-          <span>🗑️</span> Remove My Deposit
-        </button>
+      const depositorButtonsHtml = (isMyDeposit && item.status === 'available') ? `
+        <div style="display: flex; gap: 6px; margin-top: 6px;">
+          <button class="btn btn-secondary btn-sm" data-action="edit-qty-modal" data-item-id="${item.id}" style="flex: 1; font-size: 11px; padding: 4px 6px;">
+            <span>📦</span> Edit Stock (${qty})
+          </button>
+          <button class="btn btn-danger btn-sm" data-action="delete-item" data-item-id="${item.id}" style="flex: 1; font-size: 11px; padding: 4px 6px;">
+            <span>🗑️</span> Remove
+          </button>
+        </div>
       ` : '';
 
       let actionButton = '';
@@ -398,15 +467,15 @@
           <button class="btn btn-primary" data-action="claim-modal" data-item-id="${item.id}" style="width: 100%;">
             <span>⚡</span> Set Price & Take to Sell
           </button>
-          ${deleteButtonHtml}
+          ${depositorButtonsHtml}
         `;
       } else {
-        // Supplier view: show deposit info + delete if it's their own
+        // Supplier view: show deposit info + edit/delete if it's their own
         actionButton = `
           <div style="font-size: 11px; color: var(--text-dim); text-align: center; padding: 6px;">
             ${isMyDeposit ? `Your Deposit: ${qty} pcs (Waiting for seller to take & set price)` : `Deposited by: ${escapeHtml(item.supplierName)}`}
           </div>
-          ${deleteButtonHtml}
+          ${depositorButtonsHtml}
         `;
       }
 
@@ -604,6 +673,36 @@
     }).join('');
   }
 
+  // Helper: render breakdown of balances owed by each seller for a supplier
+  function renderSellerBreakdownHtml(u, inline = false) {
+    if (u.role !== 'supplier') return '';
+    const sellers = (appState.users || []).filter(s => s.role === 'seller');
+    if (inline) {
+      const parts = sellers.map(s => {
+        const amt = (u.sellerBalances && u.sellerBalances[s.id]) || 0;
+        const shortName = s.name.split(' ')[0];
+        return `<span style="white-space: nowrap;">${shortName}: <strong style="color: ${amt > 0 ? 'var(--accent-green)' : 'var(--text-dim)'};">${fmtCurrency(amt)}</strong></span>`;
+      });
+      return `<div style="font-size: 11px; color: var(--text-dim); margin-top: 3px;">${parts.join(' • ')}</div>`;
+    }
+    const lines = sellers.map(s => {
+      const amt = (u.sellerBalances && u.sellerBalances[s.id]) || 0;
+      const shortName = s.name.split(' ')[0];
+      return `
+        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+          <span style="color: #fff;">🛒 ${shortName}:</span>
+          <strong style="color: ${amt > 0 ? 'var(--accent-green)' : 'var(--text-dim)'};">${fmtCurrency(amt)}</strong>
+        </div>
+      `;
+    }).join('');
+    return `
+      <div style="margin-top: 6px; padding: 6px 8px; background: rgba(0, 240, 255, 0.04); border-radius: 4px; border: 1px solid rgba(0, 240, 255, 0.12);">
+        <div style="color: var(--text-dim); font-size: 10px; text-transform: uppercase; margin-bottom: 3px; font-weight: 700;">Balance by Seller:</div>
+        ${lines}
+      </div>
+    `;
+  }
+
   // TOPIC 3: TEAM & BALANCES (Adem, Amine, Aymen, Hmayma)
   function renderTeamTopic() {
     const cardsContainer = document.getElementById('teamCardsGrid');
@@ -635,6 +734,7 @@
                 💸 Withdraw
               </button>
             </div>
+            ${renderSellerBreakdownHtml(u, false)}
           </div>
           <div style="margin-top: auto; padding-top: 8px;">
             ${!isCurrent ? `
@@ -662,7 +762,10 @@
           <td><span class="role-badge ${u.role}">${u.role.toUpperCase()}</span></td>
           <td>${escapeHtml(u.g2gStoreName || '—')}</td>
           <td>${u.role === 'seller' ? `${u.commissionRate || 10}%` : '—'}</td>
-          <td style="color: var(--accent-green); font-weight: 700;">${fmtCurrency(u.balance)}</td>
+          <td style="color: var(--accent-green); font-weight: 700;">
+            ${fmtCurrency(u.balance)}
+            ${renderSellerBreakdownHtml(u, true)}
+          </td>
           <td>
             <div style="display: flex; gap: 6px; align-items: center;">
               <button class="btn btn-outline-green btn-sm" data-action="withdraw-user" data-user-id="${u.id}" style="padding: 3px 8px; font-size: 11px;">
@@ -765,6 +868,17 @@
                 <span class="val">${formatRelativeTime(item.soldAt)}</span>
               </div>
             </div>
+            ${item.proofImage ? `
+              <div style="margin-top: 10px;">
+                <button class="btn btn-outline-cyan btn-sm" data-action="view-proof" data-item-id="${item.id}" style="width: 100%; font-size: 11px; padding: 5px 8px;">
+                  <span>📸</span> View Sale Proof Screenshot
+                </button>
+              </div>
+            ` : `
+              <div style="margin-top: 8px; font-size: 11px; color: var(--text-dim); text-align: center;">
+                No screenshot proof attached
+              </div>
+            `}
           </div>
         `;
         }).join('');
@@ -976,6 +1090,21 @@
         return;
       }
 
+      // Edit stock quantity (supplier/depositor updates quantity while available)
+      const editQtyBtn = e.target.closest('button[data-action="edit-qty-modal"]');
+      if (editQtyBtn) {
+        const item = appState.items.find(i => i.id === editQtyBtn.dataset.itemId);
+        if (item) {
+          const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+          document.getElementById('editQtyItemId').value = item.id;
+          document.getElementById('editQtyItemTitle').textContent = `ARC Raiders: ${item.title}`;
+          const qtyInput = document.getElementById('editQtyValue');
+          if (qtyInput) qtyInput.value = qty;
+          openModal('modalEditQuantity');
+        }
+        return;
+      }
+
       // Delete item (supplier removes their own deposit)
       const deleteBtn = e.target.closest('button[data-action="delete-item"]');
       if (deleteBtn) {
@@ -992,21 +1121,51 @@
         return;
       }
 
-      // Mark sold modal
+      // View proof screenshot modal
+      const viewProofBtn = e.target.closest('button[data-action="view-proof"]');
+      if (viewProofBtn) {
+        const item = appState.items.find(i => i.id === viewProofBtn.dataset.itemId);
+        if (item && item.proofImage) {
+          const viewImg = document.getElementById('viewProofImg');
+          const viewSub = document.getElementById('viewProofSub');
+          if (viewImg) viewImg.src = item.proofImage;
+          if (viewSub) viewSub.textContent = `${escapeHtml(item.title)} (${item.quantity} pcs) • Order: ${escapeHtml(item.g2gOrderId || '—')} • Sold by: ${escapeHtml(item.lockedBySellerName || 'Seller')}`;
+          openModal('modalViewProof');
+        }
+        return;
+      }
+
+      // Mark sold modal (Supports full or partial quantity sale)
       const soldBtn = e.target.closest('button[data-action="mark-sold-modal"]');
       if (soldBtn) {
         const item = appState.items.find(i => i.id === soldBtn.dataset.itemId);
         if (item) {
-          const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+          const totalQty = Math.max(1, parseInt(item.quantity, 10) || 1);
           const unitPrice = item.supplierTargetPrice || 0;
-          const totalPrice = unitPrice * qty;
 
           document.getElementById('markSoldItemId').value = item.id;
-          document.getElementById('markSoldItemTitle').textContent = `ARC Raiders: ${item.title} (${qty}x)`;
-          document.getElementById('markSoldSupplierPayout').value = fmtCurrency(totalPrice);
-          document.getElementById('markSoldFinalPrice').value = totalPrice.toFixed(2);
-          document.getElementById('markSoldOrderId').value = `G2G-ORD-${Math.floor(1000000 + Math.random() * 9000000)}`;
-          document.getElementById('markSoldProfitPreview').innerHTML = `Final G2G Sale Price: <strong>${fmtCurrency(totalPrice)}</strong> (${qty} pcs). No 10% fee added.`;
+          document.getElementById('markSoldItemTitle').textContent = `ARC Raiders: ${item.title} (${totalQty} available in stock)`;
+          
+          const qtyInput = document.getElementById('markSoldQuantity');
+          const maxBadge = document.getElementById('markSoldMaxQtyBadge');
+          const unitPriceEl = document.getElementById('markSoldUnitPrice');
+          const orderIdEl = document.getElementById('markSoldOrderId');
+          const finalPriceEl = document.getElementById('markSoldFinalPrice');
+
+          if (qtyInput) {
+            qtyInput.max = totalQty;
+            qtyInput.value = totalQty;
+          }
+          if (maxBadge) maxBadge.textContent = `/ ${totalQty} max`;
+          if (unitPriceEl) unitPriceEl.value = fmtCurrency(unitPrice);
+          if (orderIdEl) orderIdEl.value = `G2G-ORD-${Math.floor(1000000 + Math.random() * 9000000)}`;
+          if (finalPriceEl) {
+            delete finalPriceEl.dataset.userEdited;
+            delete finalPriceEl.dataset.lastQty;
+          }
+
+          setProofImage('');
+          updateMarkSoldCalculations();
           openModal('modalMarkSold');
         }
         return;
@@ -1141,6 +1300,11 @@
         const itemId = document.getElementById('claimItemId').value;
         const priceVal = parseFloat(claimPriceInput.value) || 0;
 
+        if (priceVal <= 0) {
+          showToast('Price must be greater than $0.00. Negative prices are not allowed.', 'warning');
+          return;
+        }
+
         try {
           const res = await fetch(`/api/items/${itemId}/claim`, {
             method: 'POST',
@@ -1201,6 +1365,11 @@
         const itemId = document.getElementById('editPriceItemId').value;
         const priceVal = parseFloat(editPriceInput.value) || 0;
 
+        if (priceVal <= 0) {
+          showToast('Price must be greater than $0.00. Negative prices are not allowed.', 'warning');
+          return;
+        }
+
         try {
           const res = await fetch(`/api/items/${itemId}/price`, {
             method: 'POST',
@@ -1220,6 +1389,47 @@
         } catch (err) {
           console.error(err);
           showToast('Network error updating price', 'warning');
+        }
+      });
+    }
+
+    // Form Edit Quantity (Depositor updates stock while available)
+    const formEditQty = document.getElementById('formEditQuantity');
+    if (formEditQty) {
+      formEditQty.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const user = getCurrentUser();
+        const itemId = document.getElementById('editQtyItemId').value;
+        const newQty = parseInt(document.getElementById('editQtyValue').value, 10);
+
+        if (isNaN(newQty) || newQty < 1) {
+          showToast('Quantity must be at least 1.', 'warning');
+          return;
+        }
+
+        try {
+          const res = await fetch(`/api/items/${itemId}/quantity`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              quantity: newQty,
+              requesterId: user.id
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            closeModal(document.getElementById('modalEditQuantity'));
+            const target = (appState.items || []).find(i => i.id === itemId);
+            if (target) target.quantity = newQty;
+            renderAll();
+            showToast(`Stock updated to ${newQty} pcs!`, 'success');
+            await fetchState();
+          } else {
+            showToast(data.error || 'Failed to update stock', 'warning');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast('Network error updating stock', 'warning');
         }
       });
     }
@@ -1281,40 +1491,233 @@
       });
     }
 
-    // Form Mark Sold
+    // Dynamic Calculation & Proof Uploader for Mark Sold Modal
+    function updateMarkSoldCalculations() {
+      const itemId = document.getElementById('markSoldItemId')?.value;
+      const item = appState.items.find(i => i.id === itemId);
+      if (!item) return;
+
+      const totalQty = Math.max(1, parseInt(item.quantity, 10) || 1);
+      const qtyInput = document.getElementById('markSoldQuantity');
+      let soldQty = parseInt(qtyInput?.value, 10);
+      if (isNaN(soldQty) || soldQty < 1) soldQty = 1;
+      if (soldQty > totalQty) soldQty = totalQty;
+      if (qtyInput && qtyInput.value != soldQty) qtyInput.value = soldQty;
+
+      const unitPrice = item.supplierTargetPrice || 0;
+      const totalCost = unitPrice * soldQty;
+
+      const payoutEl = document.getElementById('markSoldSupplierPayout');
+      const finalPriceEl = document.getElementById('markSoldFinalPrice');
+      const profitPreview = document.getElementById('markSoldProfitPreview');
+      const noticeBox = document.getElementById('markSoldPartialNotice');
+      const noticeSold = document.getElementById('noticeSoldQty');
+      const noticeRem = document.getElementById('noticeRemainingQty');
+
+      if (payoutEl) payoutEl.value = fmtCurrency(totalCost);
+
+      if (finalPriceEl && (!finalPriceEl.dataset.userEdited || finalPriceEl.dataset.lastQty != soldQty)) {
+        finalPriceEl.value = totalCost.toFixed(2);
+        finalPriceEl.dataset.lastQty = soldQty;
+      }
+
+      const finalSoldPrice = parseFloat(finalPriceEl?.value) || totalCost;
+      const grossProfit = Math.max(0, finalSoldPrice - totalCost);
+
+      if (profitPreview) {
+        if (finalSoldPrice <= 0) {
+          profitPreview.innerHTML = `<span style="color: var(--accent-red); font-weight: 700;">⚠️ Price must be greater than $0.00.</span>`;
+        } else {
+          profitPreview.innerHTML = `Final G2G Sale Price: <strong>${fmtCurrency(finalSoldPrice)}</strong> (${soldQty} pcs). Supplier: ${fmtCurrency(totalCost)}${grossProfit > 0 ? `, Profit: <strong>+${fmtCurrency(grossProfit)}</strong>` : ''}. No 10% added.`;
+        }
+      }
+
+      const remainingQty = totalQty - soldQty;
+      if (remainingQty > 0) {
+        if (noticeBox) noticeBox.style.display = 'block';
+        if (noticeSold) noticeSold.textContent = soldQty;
+        if (noticeRem) noticeRem.textContent = remainingQty;
+      } else {
+        if (noticeBox) noticeBox.style.display = 'none';
+      }
+    }
+
+    const markSoldQtyInput = document.getElementById('markSoldQuantity');
+    const markSoldPriceInput = document.getElementById('markSoldFinalPrice');
+    if (markSoldQtyInput) markSoldQtyInput.addEventListener('input', updateMarkSoldCalculations);
+    if (markSoldPriceInput) {
+      markSoldPriceInput.addEventListener('input', () => {
+        markSoldPriceInput.dataset.userEdited = 'true';
+        updateMarkSoldCalculations();
+      });
+    }
+
+    // Proof Upload & Paste Handling
+    const proofDropZone = document.getElementById('proofDropZone');
+    const markSoldProofFile = document.getElementById('markSoldProofFile');
+    const btnRemoveProof = document.getElementById('btnRemoveProof');
+
+    if (proofDropZone) {
+      proofDropZone.addEventListener('click', (e) => {
+        if (e.target.closest('#btnRemoveProof')) return;
+        if (markSoldProofFile) markSoldProofFile.click();
+      });
+      proofDropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        proofDropZone.style.borderColor = 'var(--accent-cyan)';
+      });
+      proofDropZone.addEventListener('dragleave', () => {
+        proofDropZone.style.borderColor = 'rgba(0, 240, 255, 0.35)';
+      });
+      proofDropZone.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        proofDropZone.style.borderColor = 'rgba(0, 240, 255, 0.35)';
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          const file = e.dataTransfer.files[0];
+          if (file.type.startsWith('image/')) {
+            const compressed = await compressImage(file);
+            setProofImage(compressed);
+            showToast('📸 Screenshot proof attached!', 'info');
+          }
+        }
+      });
+    }
+
+    if (markSoldProofFile) {
+      markSoldProofFile.addEventListener('change', async (e) => {
+        if (e.target.files && e.target.files[0]) {
+          const compressed = await compressImage(e.target.files[0]);
+          setProofImage(compressed);
+          showToast('📸 Screenshot proof attached!', 'info');
+        }
+      });
+    }
+
+    if (btnRemoveProof) {
+      btnRemoveProof.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setProofImage('');
+      });
+    }
+
+    // Clipboard Paste Listener (Ctrl+V) when Mark Sold Modal is Open
+    window.addEventListener('paste', async (e) => {
+      const modal = document.getElementById('modalMarkSold');
+      if (!modal || !modal.classList.contains('active')) return;
+      const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.indexOf('image') !== -1) {
+          const blob = item.getAsFile();
+          if (blob) {
+            const compressed = await compressImage(blob);
+            setProofImage(compressed);
+            showToast('📸 Screenshot pasted from clipboard!', 'info');
+            break;
+          }
+        }
+      }
+    });
+
+    // Form Mark Sold (Submit full or partial quantity sale)
     const formMarkSold = document.getElementById('formMarkSold');
     if (formMarkSold) {
       formMarkSold.addEventListener('submit', async (e) => {
         e.preventDefault();
         const user = getCurrentUser();
         const itemId = document.getElementById('markSoldItemId').value;
-        const g2gOrderId = document.getElementById('markSoldOrderId').value.trim();
-        const finalPrice = parseFloat(document.getElementById('markSoldFinalPrice').value);
+        const item = appState.items.find(i => i.id === itemId);
+        if (!item) return;
 
-        const res = await fetch(`/api/items/${itemId}/mark-sold`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sellerId: user.id, g2gOrderId, finalPrice })
-        });
-        const data = await res.json();
-        if (data.success) {
-          closeModal(document.getElementById('modalMarkSold'));
-          showToast(`Sale recorded! Credited ${fmtCurrency(data.profit)} to seller balance.`, 'success');
+        const totalQty = Math.max(1, parseInt(item.quantity, 10) || 1);
+        const soldQty = parseInt(document.getElementById('markSoldQuantity')?.value, 10) || totalQty;
+        const finalPrice = parseFloat(document.getElementById('markSoldFinalPrice')?.value);
+        const g2gOrderId = document.getElementById('markSoldOrderId')?.value.trim();
+
+        if (isNaN(finalPrice) || finalPrice <= 0) {
+          showToast('Final sale price must be greater than $0.00. Negative prices are not allowed.', 'warning');
+          return;
+        }
+
+        if (soldQty < 1 || soldQty > totalQty) {
+          showToast(`Quantity must be between 1 and ${totalQty}.`, 'warning');
+          return;
+        }
+
+        try {
+          const res = await fetch(`/api/items/${itemId}/mark-sold`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sellerId: user.id,
+              g2gOrderId,
+              finalPrice,
+              soldQuantity: soldQty,
+              proofImage: currentProofBase64
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            closeModal(document.getElementById('modalMarkSold'));
+            setProofImage('');
+            if (data.remainingQuantity > 0) {
+              showToast(`Partial sale recorded! Sold ${soldQty} pcs. ${data.remainingQuantity} pcs remain locked for you.`, 'success');
+            } else {
+              showToast(`Sale recorded! Credited ${fmtCurrency(data.profit)} to seller balance.`, 'success');
+            }
+            playNotification('sold');
+            await fetchState();
+          } else {
+            showToast(data.error || 'Failed to record sale', 'warning');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast('Network error recording sale', 'warning');
         }
       });
     }
 
     // Withdraw Modal & Calculation Logic
+    let currentWithdrawUser = null;
     function openWithdrawModal(targetUserId) {
       const user = targetUserId ? (appState.users.find(u => u.id === targetUserId) || getCurrentUser()) : getCurrentUser();
+      currentWithdrawUser = user;
       const userNameEl = document.getElementById('withdrawUserName');
       const balanceEl = document.getElementById('withdrawAvailableBalance');
       const amountInput = document.getElementById('withdrawAmount');
       const destInput = document.getElementById('withdrawDestination');
       const alertBox = document.getElementById('withdrawAlertBox');
+      const breakdownEl = document.getElementById('withdrawSellerBreakdown');
+      const groupSeller = document.getElementById('groupWithdrawFromSeller');
+      const sellerSelect = document.getElementById('withdrawFromSellerSelect');
 
       if (userNameEl) userNameEl.textContent = user.name;
       if (balanceEl) balanceEl.textContent = fmtCurrency(user.balance);
+
+      const sellers = (appState.users || []).filter(u => u.role === 'seller');
+      if (user.role === 'supplier') {
+        const parts = sellers.map(s => {
+          const amt = (user.sellerBalances && user.sellerBalances[s.id]) || 0;
+          const shortName = s.name.split(' ')[0];
+          return `🛒 ${shortName}: <strong style="color: ${amt > 0 ? 'var(--accent-green)' : 'inherit'};">${fmtCurrency(amt)}</strong>`;
+        });
+        if (breakdownEl) {
+          breakdownEl.innerHTML = `<span style="color: var(--text-dim);">Balance from Sellers:</span> ${parts.join(' • ')}`;
+          breakdownEl.style.display = 'block';
+        }
+        if (groupSeller && sellerSelect) {
+          sellerSelect.innerHTML = `<option value="">Any / Proportional across sellers (${fmtCurrency(user.balance)})</option>` +
+            sellers.map(s => {
+              const amt = (user.sellerBalances && user.sellerBalances[s.id]) || 0;
+              return `<option value="${s.id}">From ${s.name} (${fmtCurrency(amt)} available)</option>`;
+            }).join('');
+          groupSeller.style.display = 'block';
+        }
+      } else {
+        if (breakdownEl) breakdownEl.style.display = 'none';
+        if (groupSeller) groupSeller.style.display = 'none';
+      }
+
       if (amountInput) {
         amountInput.value = '';
         amountInput.max = user.balance || 0;
@@ -1327,11 +1730,13 @@
     }
 
     function updateWithdrawPreview(optUser) {
-      const user = optUser || getCurrentUser();
+      const user = optUser || currentWithdrawUser || getCurrentUser();
       const input = document.getElementById('withdrawAmount');
       const amount = parseFloat(input ? input.value : 0) || 0;
       const btnSubmit = document.getElementById('btnSubmitWithdraw');
       const alertBox = document.getElementById('withdrawAlertBox');
+      const sellerSelect = document.getElementById('withdrawFromSellerSelect');
+      const chosenSellerId = sellerSelect?.value || '';
 
       const grossEl = document.getElementById('previewWithdrawGross');
       const fixedEl = document.getElementById('previewWithdrawFixed');
@@ -1351,6 +1756,11 @@
       if (totalFeeEl) totalFeeEl.textContent = `-${fmtCurrency(totalFee)}`;
       if (netEl) netEl.textContent = fmtCurrency(netPayout);
 
+      let maxAvailable = user.balance || 0;
+      if (chosenSellerId) {
+        maxAvailable = (user.sellerBalances && user.sellerBalances[chosenSellerId]) || 0;
+      }
+
       if (amount <= 0) {
         if (alertBox) alertBox.style.display = 'none';
         if (btnSubmit) btnSubmit.disabled = true;
@@ -1369,13 +1779,13 @@
         return;
       }
 
-      if (amount > (user.balance || 0)) {
+      if (amount > maxAvailable) {
         if (alertBox) {
           alertBox.style.display = 'block';
           alertBox.style.background = 'rgba(255, 51, 102, 0.15)';
           alertBox.style.border = '1px solid rgba(255, 51, 102, 0.3)';
           alertBox.style.color = 'var(--accent-red)';
-          alertBox.textContent = `⚠️ Amount exceeds available balance of ${fmtCurrency(user.balance)}.`;
+          alertBox.textContent = `⚠️ Amount exceeds available balance (${fmtCurrency(maxAvailable)}).`;
         }
         if (btnSubmit) btnSubmit.disabled = true;
         return;
@@ -1403,13 +1813,33 @@
       withdrawAmountInput.addEventListener('input', () => updateWithdrawPreview());
     }
 
+    const withdrawFromSellerSelect = document.getElementById('withdrawFromSellerSelect');
+    if (withdrawFromSellerSelect) {
+      withdrawFromSellerSelect.addEventListener('change', () => {
+        const user = currentWithdrawUser || getCurrentUser();
+        const chosenSellerId = withdrawFromSellerSelect.value;
+        const input = document.getElementById('withdrawAmount');
+        let maxAvailable = user.balance || 0;
+        if (chosenSellerId) {
+          maxAvailable = (user.sellerBalances && user.sellerBalances[chosenSellerId]) || 0;
+        }
+        if (input) input.max = maxAvailable;
+        updateWithdrawPreview(user);
+      });
+    }
+
     const btnWithdrawMax = document.getElementById('btnWithdrawMax');
     if (btnWithdrawMax) {
       btnWithdrawMax.addEventListener('click', () => {
-        const user = getCurrentUser();
+        const user = currentWithdrawUser || getCurrentUser();
         const input = document.getElementById('withdrawAmount');
+        const chosenSellerId = document.getElementById('withdrawFromSellerSelect')?.value;
+        let maxAvailable = user.balance || 0;
+        if (chosenSellerId) {
+          maxAvailable = (user.sellerBalances && user.sellerBalances[chosenSellerId]) || 0;
+        }
         if (input) {
-          input.value = (user.balance || 0).toFixed(2);
+          input.value = maxAvailable.toFixed(2);
           updateWithdrawPreview(user);
         }
       });
@@ -1419,18 +1849,14 @@
     if (formWithdraw) {
       formWithdraw.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const user = getCurrentUser();
+        const user = currentWithdrawUser || getCurrentUser();
         const amount = parseFloat(document.getElementById('withdrawAmount').value);
         const method = document.getElementById('withdrawMethod').value;
         const destination = document.getElementById('withdrawDestination').value.trim();
+        const fromSellerId = document.getElementById('withdrawFromSellerSelect')?.value || null;
 
         if (isNaN(amount) || amount <= 1.00) {
           showToast('Amount must exceed $1.00 flat fee.', 'warning');
-          return;
-        }
-
-        if (amount > (user.balance || 0)) {
-          showToast(`Insufficient balance: ${fmtCurrency(user.balance)} available.`, 'warning');
           return;
         }
 
@@ -1442,7 +1868,8 @@
               userId: user.id,
               amount,
               method,
-              destination
+              destination,
+              fromSellerId
             })
           });
           const data = await res.json();
@@ -1455,6 +1882,9 @@
               targetUser.balance = data.newBalance !== undefined 
                 ? data.newBalance 
                 : parseFloat(Math.max(0, targetUser.balance - amount).toFixed(2));
+              if (data.sellerBalances) {
+                targetUser.sellerBalances = data.sellerBalances;
+              }
             }
             if (data.withdrawal) {
               if (!appState.withdrawals) appState.withdrawals = [];

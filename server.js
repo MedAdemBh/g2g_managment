@@ -19,7 +19,8 @@ const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'store.json');
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Ensure data directory exists
@@ -60,6 +61,7 @@ const getInitialSeedData = () => {
         g2gStoreName: '',
         commissionRate: 0,
         balance: 0.00,
+        sellerBalances: {},
         avatarColor: '#10b981'
       },
       {
@@ -69,6 +71,7 @@ const getInitialSeedData = () => {
         g2gStoreName: '',
         commissionRate: 0,
         balance: 0.00,
+        sellerBalances: {},
         avatarColor: '#8b5cf6'
       },
     ],
@@ -114,6 +117,7 @@ if (process.env.MONGODB_URI) {
 
 // Unified state loader (MongoDB Atlas or local JSON)
 async function getFullState() {
+  let state = null;
   if (process.env.MONGODB_URI) {
     await connectDB();
     const [users, items, withdrawals, activityLogs] = await Promise.all([
@@ -122,9 +126,14 @@ async function getFullState() {
       Withdrawal.find({}, '-_id -__v').sort({ createdAt: -1 }).lean(),
       ActivityLog.find({}, '-_id -__v').sort({ timestamp: -1 }).limit(50).lean()
     ]);
-    return { users, items, withdrawals, activityLogs };
+    state = { users, items, withdrawals, activityLogs };
+  } else {
+    state = store;
   }
-  return store;
+  (state.users || []).forEach(u => {
+    if (!u.sellerBalances) u.sellerBalances = {};
+  });
+  return state;
 }
 
 // WebSocket broadcast helper
@@ -504,8 +513,11 @@ app.post('/api/items/:id/claim', async (req, res) => {
   item.lockedBySellerName = sellerName;
   item.lockedAt = new Date().toISOString();
 
-  if (price !== undefined && price !== null && !isNaN(parseFloat(price))) {
+  if (price !== undefined && price !== null) {
     const parsedPrice = parseFloat(price);
+    if (isNaN(parsedPrice) || parsedPrice <= 0) {
+      return res.status(400).json({ success: false, error: 'Price must be greater than 0. Negative or zero prices are not allowed.' });
+    }
     item.supplierTargetPrice = parsedPrice;
     item.g2gListingPrice = parsedPrice;
   }
@@ -527,8 +539,8 @@ app.post('/api/items/:id/price', async (req, res) => {
   const { id } = req.params;
   const { price, sellerId } = req.body;
   const parsedPrice = parseFloat(price);
-  if (isNaN(parsedPrice) || parsedPrice < 0) {
-    return res.status(400).json({ success: false, error: 'Invalid price' });
+  if (isNaN(parsedPrice) || parsedPrice <= 0) {
+    return res.status(400).json({ success: false, error: 'Price must be greater than 0. Negative or zero prices are not allowed.' });
   }
 
   let item = null;
@@ -624,10 +636,68 @@ app.delete('/api/items/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-// 6. Mark Item as Sold on G2G
+// 5.2 Depositor updates stock quantity (only while item is still available)
+const handleUpdateQuantity = async (req, res) => {
+  const { id } = req.params;
+  const { quantity, requesterId } = req.body;
+  const newQty = parseInt(quantity, 10);
+
+  if (isNaN(newQty) || newQty < 1) {
+    return res.status(400).json({ success: false, error: 'Quantity must be at least 1.' });
+  }
+
+  let item = null;
+  if (process.env.MONGODB_URI) {
+    await connectDB();
+    item = await Item.findOne({ id });
+  } else {
+    item = store.items.find((i) => i.id === id);
+  }
+
+  if (!item) {
+    return res.status(404).json({ success: false, error: 'Item not found' });
+  }
+
+  // Only the user who deposited the item can edit its quantity
+  if (item.supplierId !== requesterId) {
+    return res.status(403).json({ success: false, error: 'You can only change stock quantity of your own deposited items.' });
+  }
+
+  // Stock can ONLY be modified if seller hasn't locked in
+  if (item.status !== 'available') {
+    return res.status(400).json({ success: false, error: 'Cannot change stock once a seller has taken the product.' });
+  }
+
+  const oldQty = item.quantity;
+  item.quantity = newQty;
+
+  if (process.env.MONGODB_URI) {
+    await item.save();
+  } else {
+    saveData(store);
+  }
+
+  await logActivity(
+    'STOCK_UPDATED',
+    item.supplierName,
+    `📦 "${item.title}" stock updated from ${oldQty} to ${newQty} pcs by ${item.supplierName}.`
+  );
+  await broadcastUpdate(
+    'STOCK_UPDATED',
+    `"${item.title}" stock updated to ${newQty} pcs`,
+    item.supplierName
+  );
+
+  res.json({ success: true, item, oldQuantity: oldQty, newQuantity: newQty });
+};
+
+app.patch('/api/items/:id/quantity', handleUpdateQuantity);
+app.post('/api/items/:id/quantity', handleUpdateQuantity);
+
+// 6. Mark Item as Sold on G2G (Full or Partial Quantity Sale)
 app.post('/api/items/:id/mark-sold', async (req, res) => {
   const { id } = req.params;
-  const { sellerId, g2gOrderId, finalPrice } = req.body;
+  const { sellerId, g2gOrderId, finalPrice, soldQuantity, proofImage } = req.body;
 
   let item = null;
   if (process.env.MONGODB_URI) {
@@ -645,47 +715,154 @@ app.post('/api/items/:id/mark-sold', async (req, res) => {
     return res.status(403).json({ success: false, error: 'Only the claiming seller can finalize the sale.' });
   }
 
-  const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
-  const totalItemCost = (item.supplierTargetPrice || 0) * qty;
-  const finalSoldPrice = parseFloat(finalPrice) || totalItemCost;
-  const supplierPayout = totalItemCost;
-  const grossProfit = Math.max(0, finalSoldPrice - supplierPayout);
+  const currentTotalQty = Math.max(1, parseInt(item.quantity, 10) || 1);
+  const qtyToSell = Math.min(currentTotalQty, Math.max(1, parseInt(soldQuantity, 10) || currentTotalQty));
+  const unitPrice = item.supplierTargetPrice || 0;
 
-  item.status = 'sold';
-  item.g2gOrderId = g2gOrderId || `G2G-ORD-${Math.floor(1000000 + Math.random() * 9000000)}`;
-  item.soldPrice = finalSoldPrice;
-  item.soldAt = new Date().toISOString();
-
-  if (process.env.MONGODB_URI) {
-    await item.save();
-    if (grossProfit > 0) {
-      await User.updateOne({ id: sellerId }, { $inc: { balance: grossProfit } });
-    }
-    await User.updateOne({ id: item.supplierId }, { $inc: { balance: supplierPayout } });
-  } else {
-    const seller = store.users.find((u) => u.id === sellerId);
-    const supplier = store.users.find((u) => u.id === item.supplierId);
-    if (seller && grossProfit > 0) {
-      seller.balance = parseFloat((seller.balance + grossProfit).toFixed(2));
-    }
-    if (supplier) {
-      supplier.balance = parseFloat((supplier.balance + supplierPayout).toFixed(2));
-    }
-    saveData(store);
+  const finalSoldPrice = parseFloat(finalPrice);
+  if (isNaN(finalSoldPrice) || finalSoldPrice <= 0) {
+    return res.status(400).json({ success: false, error: 'Final sale price must be greater than 0. Negative prices are not allowed.' });
   }
 
-  await logActivity(
-    'ITEM_SOLD',
-    item.lockedBySellerName,
-    `🎉 SOLD! "${item.title}" (${qty}x) on G2G for $${finalSoldPrice.toFixed(2)} (Order ${item.g2gOrderId}). Supplier +$${supplierPayout.toFixed(2)}${grossProfit > 0 ? `, Seller +$${grossProfit.toFixed(2)}` : ''}`
-  );
-  await broadcastUpdate('ITEM_SOLD', `🎉 "${item.title}" (${qty}x) SOLD on G2G for $${finalSoldPrice.toFixed(2)}!`, item.lockedBySellerName);
-  res.json({ success: true, item, profit: grossProfit, supplierPayout });
+  const supplierPayout = parseFloat((unitPrice * qtyToSell).toFixed(2));
+  const grossProfit = Math.max(0, parseFloat((finalSoldPrice - supplierPayout).toFixed(2)));
+  const orderId = g2gOrderId || `G2G-ORD-${Math.floor(1000000 + Math.random() * 9000000)}`;
+  const nowIso = new Date().toISOString();
+  const remainingQty = currentTotalQty - qtyToSell;
+
+  if (remainingQty > 0) {
+    // PARTIAL SALE:
+    // 1. Create a separate sold record for the sold units
+    const soldId = `item_${Date.now()}_sold`;
+    const soldRecord = {
+      id: soldId,
+      title: item.title,
+      game: item.game || 'ARC Raiders',
+      category: item.category,
+      quantity: qtyToSell,
+      supplierId: item.supplierId,
+      supplierName: item.supplierName,
+      supplierTargetPrice: item.supplierTargetPrice,
+      g2gListingPrice: item.g2gListingPrice,
+      status: 'sold',
+      lockedBySellerId: sellerId,
+      lockedBySellerName: item.lockedBySellerName,
+      lockedAt: item.lockedAt,
+      g2gOrderId: orderId,
+      soldPrice: finalSoldPrice,
+      soldAt: nowIso,
+      secretCredentials: item.secretCredentials || '',
+      notes: item.notes || '',
+      proofImage: proofImage || '',
+      createdAt: nowIso
+    };
+
+    // 2. Reduce the original item's quantity; it stays locked by the seller
+    item.quantity = remainingQty;
+
+    if (process.env.MONGODB_URI) {
+      await item.save();
+      await Item.create(soldRecord);
+      if (grossProfit > 0) {
+        await User.updateOne({ id: sellerId }, { $inc: { balance: grossProfit } });
+      }
+      if (supplierPayout > 0) {
+        const sup = await User.findOne({ id: item.supplierId });
+        if (sup) {
+          sup.balance = parseFloat(((sup.balance || 0) + supplierPayout).toFixed(2));
+          const sBals = sup.sellerBalances || {};
+          sBals[sellerId] = parseFloat(((sBals[sellerId] || 0) + supplierPayout).toFixed(2));
+          sup.sellerBalances = sBals;
+          sup.markModified('sellerBalances');
+          await sup.save();
+        }
+      }
+    } else {
+      store.items.push(soldRecord);
+      const seller = store.users.find((u) => u.id === sellerId);
+      const supplier = store.users.find((u) => u.id === item.supplierId);
+      if (seller && grossProfit > 0) {
+        seller.balance = parseFloat((seller.balance + grossProfit).toFixed(2));
+      }
+      if (supplier && supplierPayout > 0) {
+        supplier.balance = parseFloat((supplier.balance + supplierPayout).toFixed(2));
+        supplier.sellerBalances = supplier.sellerBalances || {};
+        supplier.sellerBalances[sellerId] = parseFloat(((supplier.sellerBalances[sellerId] || 0) + supplierPayout).toFixed(2));
+      }
+      saveData(store);
+    }
+
+    await logActivity(
+      'ITEM_SOLD',
+      item.lockedBySellerName,
+      `🎉 PARTIAL SALE! "${item.title}" (${qtyToSell}/${currentTotalQty} pcs) sold on G2G for $${finalSoldPrice.toFixed(2)} (Order ${orderId}). Remaining: ${remainingQty} pcs still locked.`
+    );
+    await broadcastUpdate(
+      'ITEM_SOLD',
+      `🎉 "${item.title}" (${qtyToSell} pcs) SOLD on G2G! (${remainingQty} pcs remaining in operations)`,
+      item.lockedBySellerName
+    );
+
+    return res.json({
+      success: true,
+      item,
+      soldRecord,
+      remainingQuantity: remainingQty,
+      profit: grossProfit,
+      supplierPayout
+    });
+  } else {
+    // FULL SALE:
+    item.status = 'sold';
+    item.quantity = qtyToSell;
+    item.g2gOrderId = orderId;
+    item.soldPrice = finalSoldPrice;
+    item.soldAt = nowIso;
+    item.proofImage = proofImage || '';
+
+    if (process.env.MONGODB_URI) {
+      await item.save();
+      if (grossProfit > 0) {
+        await User.updateOne({ id: sellerId }, { $inc: { balance: grossProfit } });
+      }
+      if (supplierPayout > 0) {
+        const sup = await User.findOne({ id: item.supplierId });
+        if (sup) {
+          sup.balance = parseFloat(((sup.balance || 0) + supplierPayout).toFixed(2));
+          const sBals = sup.sellerBalances || {};
+          sBals[sellerId] = parseFloat(((sBals[sellerId] || 0) + supplierPayout).toFixed(2));
+          sup.sellerBalances = sBals;
+          sup.markModified('sellerBalances');
+          await sup.save();
+        }
+      }
+    } else {
+      const seller = store.users.find((u) => u.id === sellerId);
+      const supplier = store.users.find((u) => u.id === item.supplierId);
+      if (seller && grossProfit > 0) {
+        seller.balance = parseFloat((seller.balance + grossProfit).toFixed(2));
+      }
+      if (supplier && supplierPayout > 0) {
+        supplier.balance = parseFloat((supplier.balance + supplierPayout).toFixed(2));
+        supplier.sellerBalances = supplier.sellerBalances || {};
+        supplier.sellerBalances[sellerId] = parseFloat(((supplier.sellerBalances[sellerId] || 0) + supplierPayout).toFixed(2));
+      }
+      saveData(store);
+    }
+
+    await logActivity(
+      'ITEM_SOLD',
+      item.lockedBySellerName,
+      `🎉 SOLD! "${item.title}" (${qtyToSell}x) on G2G for $${finalSoldPrice.toFixed(2)} (Order ${orderId}). Supplier +$${supplierPayout.toFixed(2)}${grossProfit > 0 ? `, Seller +$${grossProfit.toFixed(2)}` : ''}`
+    );
+    await broadcastUpdate('ITEM_SOLD', `🎉 "${item.title}" (${qtyToSell}x) SOLD on G2G for $${finalSoldPrice.toFixed(2)}!`, item.lockedBySellerName);
+    return res.json({ success: true, item, profit: grossProfit, supplierPayout });
+  }
 });
 
-// 7. Withdraw Money ($1.00 flat + 5% fee)
+// 7. Withdraw Money ($1.00 flat + 5% fee, optionally from a specific seller)
 app.post('/api/withdraw', async (req, res) => {
-  const { userId, amount, method, destination } = req.body;
+  const { userId, amount, method, destination, fromSellerId } = req.body;
   const parsedAmount = parseFloat(amount);
 
   if (!userId || isNaN(parsedAmount) || parsedAmount <= 1.00) {
@@ -707,25 +884,49 @@ app.post('/api/withdraw', async (req, res) => {
     return res.status(404).json({ success: false, error: 'User not found.' });
   }
 
-  if (user.balance < parsedAmount) {
-    return res.status(400).json({
-      success: false,
-      error: `Insufficient balance. Available: $${user.balance.toFixed(2)}, Requested: $${parsedAmount.toFixed(2)}`
-    });
+  const sBals = user.sellerBalances || {};
+
+  if (fromSellerId) {
+    const availForSeller = parseFloat((sBals[fromSellerId] || 0).toFixed(2));
+    if (availForSeller < parsedAmount) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient balance for this seller. Available: $${availForSeller.toFixed(2)}, Requested: $${parsedAmount.toFixed(2)}`
+      });
+    }
+    sBals[fromSellerId] = parseFloat((availForSeller - parsedAmount).toFixed(2));
+  } else {
+    if (user.balance < parsedAmount) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient balance. Available: $${user.balance.toFixed(2)}, Requested: $${parsedAmount.toFixed(2)}`
+      });
+    }
+    // Deduct across available seller balances
+    let remaining = parsedAmount;
+    for (const sId of Object.keys(sBals)) {
+      if (remaining <= 0) break;
+      const cur = sBals[sId] || 0;
+      const take = Math.min(cur, remaining);
+      sBals[sId] = parseFloat((cur - take).toFixed(2));
+      remaining = parseFloat((remaining - take).toFixed(2));
+    }
   }
+
+  user.balance = parseFloat((user.balance - parsedAmount).toFixed(2));
+  user.sellerBalances = sBals;
 
   const fixedFee = 1.00;
   const percentFee = parseFloat((parsedAmount * 0.05).toFixed(2));
   const totalFee = parseFloat((fixedFee + percentFee).toFixed(2));
   const netPayout = parseFloat((parsedAmount - totalFee).toFixed(2));
 
-  user.balance = parseFloat((user.balance - parsedAmount).toFixed(2));
-
   const withdrawalRecord = {
     id: `wth_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     userId: user.id,
     userName: user.name,
     userRole: user.role,
+    fromSellerId: fromSellerId || null,
     amount: parsedAmount,
     fixedFee,
     percentFee,
@@ -738,7 +939,8 @@ app.post('/api/withdraw', async (req, res) => {
   };
 
   if (process.env.MONGODB_URI) {
-    await User.updateOne({ id: user.id }, { $set: { balance: user.balance } });
+    user.markModified('sellerBalances');
+    await user.save();
     await Withdrawal.create(withdrawalRecord);
   } else {
     if (!store.withdrawals) store.withdrawals = [];
@@ -746,17 +948,19 @@ app.post('/api/withdraw', async (req, res) => {
     saveData(store);
   }
 
+  const fromSellerText = fromSellerId ? ` (From Seller: ${fromSellerId})` : '';
   await logActivity(
     'WITHDRAWAL',
     user.name,
-    `💸 ${user.name} withdrew $${parsedAmount.toFixed(2)} (Fee: $${totalFee.toFixed(2)} [$1.00 + 5%], Net: $${netPayout.toFixed(2)}) via ${withdrawalRecord.method}`
+    `💸 ${user.name} withdrew $${parsedAmount.toFixed(2)}${fromSellerText} (Fee: $${totalFee.toFixed(2)} [$1.00 + 5%], Net: $${netPayout.toFixed(2)}) via ${withdrawalRecord.method}`
   );
   await broadcastUpdate('WITHDRAWAL', `💸 ${user.name} withdrew $${parsedAmount.toFixed(2)} (Net: $${netPayout.toFixed(2)})`, user.name);
 
   res.json({
     success: true,
     withdrawal: withdrawalRecord,
-    newBalance: user.balance
+    newBalance: user.balance,
+    sellerBalances: user.sellerBalances
   });
 });
 

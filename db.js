@@ -8,6 +8,7 @@ const UserSchema = new mongoose.Schema({
   g2gStoreName: { type: String, default: '' },
   commissionRate: { type: Number, default: 10 },
   balance: { type: Number, default: 0 },
+  sellerBalances: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
   avatarColor: { type: String, default: '#00f0ff' }
 });
 
@@ -31,6 +32,7 @@ const ItemSchema = new mongoose.Schema({
   soldAt: { type: String, default: null },
   secretCredentials: { type: String, default: '' },
   notes: { type: String, default: '' },
+  proofImage: { type: String, default: '' },
   createdAt: { type: String, default: () => new Date().toISOString() }
 });
 
