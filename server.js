@@ -559,6 +559,20 @@ app.post('/api/items/:id/release', async (req, res) => {
   res.json({ success: true, item });
 });
 
+// Delete item
+app.delete('/api/items/:id', async (req, res) => {
+  const { id } = req.params;
+  if (process.env.MONGODB_URI) {
+    await connectDB();
+    await Item.deleteOne({ id });
+  } else {
+    store.items = store.items.filter((i) => i.id !== id);
+    saveData(store);
+  }
+  await broadcastUpdate('ITEM_DELETED', `Item removed from pool`, 'System');
+  res.json({ success: true });
+});
+
 // 6. Mark Item as Sold on G2G
 app.post('/api/items/:id/mark-sold', async (req, res) => {
   const { id } = req.params;
