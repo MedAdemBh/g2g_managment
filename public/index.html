@@ -104,7 +104,7 @@
 
       <button class="topic-tab" data-topic="history">
         <span class="tab-icon">📜</span>
-        <span class="tab-label">Completed Sales</span>
+        <span class="tab-label">Withdrawal History</span>
         <span id="badgeTopicHistory" class="topic-counter">0</span>
       </button>
 
@@ -247,9 +247,8 @@
             <thead>
               <tr>
                 <th>Date & Time</th>
-                <th>Member</th>
                 <th>Gross Amount</th>
-                <th>Fee Breakdown ($1.00 + 5%)</th>
+                <th>Fee ($1.00 + 5%)</th>
                 <th>Net Payout</th>
                 <th>Method / Destination</th>
                 <th>Status</th>
@@ -267,29 +266,12 @@
     <section id="topicHistorySection" class="topic-content">
       <div class="topic-header-bar">
         <div>
-          <h2>📜 Completed Sales & Live Audit History</h2>
-          <p class="section-desc">Track completed G2G orders, payouts to Aymen and Hmayma, and seller commission profits.</p>
+          <h2>💸 My Withdrawal History</h2>
+          <p class="section-desc">Your personal payout and withdrawal records.</p>
         </div>
       </div>
 
-      <!-- Completed Sales Grid -->
-      <h3 style="font-size: 16px; margin-bottom: 14px; color: var(--accent-green); display: flex; align-items: center; gap: 8px;">
-        <span>🎉</span> Completed G2G Transactions
-      </h3>
-      <div id="soldGrid" class="items-grid" style="margin-bottom: 30px;">
-        <!-- Populated by JS -->
-      </div>
-      <div id="soldEmptyState" class="empty-state-box" style="display:none; margin-bottom: 30px;">
-        <p>No completed sales recorded yet.</p>
-      </div>
-
-      <!-- Audit Log Trail -->
-      <div class="feed-panel">
-        <h3 style="margin-bottom: 14px; font-size: 15px;">Live Anti-Collision & Claim Trail</h3>
-        <div id="feedList" class="feed-list">
-          <!-- Populated by JS -->
-        </div>
-      </div>
+      <!-- Completed sales removed per user request -->
     </section>
 
     <!-- ==================== TOPIC 5: G2G LIVE PRICE RADAR ==================== -->

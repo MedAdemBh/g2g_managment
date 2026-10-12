@@ -407,7 +407,9 @@
     if (badgePool) badgePool.textContent = available.length;
     if (badgeOps) badgeOps.textContent = locked.length;
     if (badgeTeam) badgeTeam.textContent = (appState.users || []).length;
-    if (badgeHistory) badgeHistory.textContent = sold.length;
+    // Badge = only THIS user's own withdrawal count
+    const myWithdrawals = (appState.withdrawals || []).filter(w => w.userId === currentUserId);
+    if (badgeHistory) badgeHistory.textContent = myWithdrawals.length;
   }
 
   let poolCategoryFilter = '';
@@ -782,15 +784,16 @@
       `;
     }).join('');
 
-    // Render Withdrawals Table
+    // Render Withdrawals Table — only current user's withdrawals
     const withdrawalsTbody = document.getElementById('withdrawalsTableBody');
     if (withdrawalsTbody) {
-      const withdrawals = appState.withdrawals || [];
+      const currentUser = getCurrentUser();
+      const withdrawals = (appState.withdrawals || []).filter(w => w.userId === currentUser.id);
       if (withdrawals.length === 0) {
         withdrawalsTbody.innerHTML = `
           <tr>
-            <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 18px; font-size: 13px;">
-              No withdrawals requested yet. Click "💸 Withdraw" to take out your earnings.
+            <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 18px; font-size: 13px;">
+              No withdrawals yet. Click "💸 Withdraw" to take out your earnings.
             </td>
           </tr>
         `;
@@ -798,7 +801,6 @@
         withdrawalsTbody.innerHTML = withdrawals.map(w => `
           <tr>
             <td style="font-size: 12px; color: var(--text-muted);">${new Date(w.createdAt).toLocaleString()}</td>
-            <td><strong style="color: #fff;">${escapeHtml(w.userName)}</strong></td>
             <td style="font-weight: 700; color: #fff;">${fmtCurrency(w.amount)}</td>
             <td style="color: var(--accent-red); font-size: 12px;">
               -${fmtCurrency(w.totalFee)} <span style="font-size: 10px; color: var(--text-dim);">($1.00 + 5%)</span>
@@ -815,93 +817,10 @@
     }
   }
 
-  // TOPIC 4: SALES & HISTORY
+  // TOPIC 4: HISTORY — only withdrawal records shown
   function renderHistoryTopic() {
-    const soldGrid = document.getElementById('soldGrid');
-    const soldEmpty = document.getElementById('soldEmptyState');
-    const feedList = document.getElementById('feedList');
-
-    // Sold Items
-    const soldItems = (appState.items || []).filter(i => i.status === 'sold');
-    if (soldGrid) {
-      if (soldItems.length === 0) {
-        soldGrid.innerHTML = '';
-        if (soldEmpty) soldEmpty.style.display = 'block';
-      } else {
-        if (soldEmpty) soldEmpty.style.display = 'none';
-        soldGrid.innerHTML = soldItems.map(item => {
-          const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
-          const unitPrice = item.supplierTargetPrice || 0;
-          const totalPrice = unitPrice * qty;
-          return `
-          <div class="item-card" style="border-color: rgba(0,245,155,0.3);">
-            <div class="card-top">
-              <span class="game-badge">${escapeHtml(item.game)}</span>
-              <span class="category-badge" style="background: rgba(0,245,155,0.1); color: var(--accent-green);">Sold (${qty}x)</span>
-            </div>
-            <h3 class="item-title">${escapeHtml(item.title)}</h3>
-            <div class="price-box">
-              <div class="price-item">
-                <div class="price-label">Price</div>
-                <div class="price-val">${fmtCurrency(totalPrice)}</div>
-              </div>
-              <div class="price-item profit">
-                <div class="price-label">Final G2G Sold</div>
-                <div class="price-val">${fmtCurrency(item.soldPrice || totalPrice)}</div>
-              </div>
-            </div>
-            <div class="card-meta-list">
-              <div class="meta-row">
-                <span>Quantity:</span>
-                <span class="val" style="color: var(--accent-gold); font-weight: 700;">${qty} pcs</span>
-              </div>
-              <div class="meta-row">
-                <span>Sold By:</span>
-                <span class="val">${escapeHtml(item.lockedBySellerName)}</span>
-              </div>
-              <div class="meta-row">
-                <span>G2G Order:</span>
-                <span class="val">${escapeHtml(item.g2gOrderId || '—')}</span>
-              </div>
-              <div class="meta-row">
-                <span>Date:</span>
-                <span class="val">${formatRelativeTime(item.soldAt)}</span>
-              </div>
-            </div>
-            ${item.proofImage ? `
-              <div style="margin-top: 10px;">
-                <button class="btn btn-outline-cyan btn-sm" data-action="view-proof" data-item-id="${item.id}" style="width: 100%; font-size: 11px; padding: 5px 8px;">
-                  <span>📸</span> View Sale Proof Screenshot
-                </button>
-              </div>
-            ` : `
-              <div style="margin-top: 8px; font-size: 11px; color: var(--text-dim); text-align: center;">
-                No screenshot proof attached
-              </div>
-            `}
-          </div>
-        `;
-        }).join('');
-      }
-    }
-
-    // Activity Logs
-    if (feedList) {
-      const logs = appState.activityLogs || [];
-      if (logs.length === 0) {
-        feedList.innerHTML = '<div style="color: var(--text-dim); font-size: 12px;">No activity recorded</div>';
-      } else {
-        feedList.innerHTML = logs.map(l => `
-          <div class="feed-item">
-            <div class="feed-icon">⚡</div>
-            <div style="flex:1;">
-              <div style="color:#fff;">${escapeHtml(l.message)}</div>
-              <div class="feed-time">${formatRelativeTime(l.timestamp)} • by ${escapeHtml(l.actorName || 'User')}</div>
-            </div>
-          </div>
-        `).join('');
-      }
-    }
+    // Sold items grid removed. Only withdrawal table (rendered in renderTeamTopic) remains.
+    // Nothing additional to render here.
   }
 
   // Master Render
