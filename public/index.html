@@ -768,6 +768,16 @@
           ℹ️ <strong>Partial sale:</strong> Selling <span id="noticeSoldQty" style="font-weight: 700;">0</span> pcs. Remaining <span id="noticeRemainingQty" style="font-weight: 700;">0</span> pcs will stay locked under your name in Taken Items.
         </div>
 
+        <!-- VAT on Seller Commission -->
+        <div class="form-group">
+          <label style="margin-bottom: 6px; display: block;">G2G Platform VAT on Seller Fee <span style="color: var(--text-dim); font-size: 11px;">(optional — deducted from seller profit only)</span></label>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="vat-toggle-btn active" id="btnVatNone" data-vat="0" style="flex: 1; padding: 7px 0; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,240,255,0.12); color: var(--accent-cyan); font-weight: 700; font-size: 12px; cursor: pointer; transition: all 0.2s;">No VAT</button>
+            <button type="button" class="vat-toggle-btn" id="btnVat19" data-vat="19" style="flex: 1; padding: 7px 0; border-radius: 6px; border: 1px solid rgba(255,183,3,0.2); background: rgba(255,183,3,0.05); color: var(--text-dim); font-weight: 700; font-size: 12px; cursor: pointer; transition: all 0.2s;">VAT 19%</button>
+            <button type="button" class="vat-toggle-btn" id="btnVat25" data-vat="25" style="flex: 1; padding: 7px 0; border-radius: 6px; border: 1px solid rgba(255,51,102,0.2); background: rgba(255,51,102,0.05); color: var(--text-dim); font-weight: 700; font-size: 12px; cursor: pointer; transition: all 0.2s;">VAT 25%</button>
+          </div>
+        </div>
+
         <div class="form-group">
           <label>Optional G2G Order / Invoice #</label>
           <input type="text" id="markSoldOrderId" class="form-control" placeholder="e.g. G2G-ORD-771829 (optional)">

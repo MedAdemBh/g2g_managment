@@ -697,7 +697,10 @@ app.post('/api/items/:id/quantity', handleUpdateQuantity);
 // 6. Mark Item as Sold on G2G (Full or Partial Quantity Sale)
 app.post('/api/items/:id/mark-sold', async (req, res) => {
   const { id } = req.params;
-  const { sellerId, g2gOrderId, finalPrice, soldQuantity, proofImage } = req.body;
+  const { sellerId, g2gOrderId, finalPrice, soldQuantity, proofImage, vatRate } = req.body;
+
+  // Validate VAT rate: only 0, 19, or 25 allowed
+  const parsedVatRate = [0, 19, 25].includes(parseInt(vatRate)) ? parseInt(vatRate) : 0;
 
   let item = null;
   if (process.env.MONGODB_URI) {
@@ -724,8 +727,14 @@ app.post('/api/items/:id/mark-sold', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Final sale price must be greater than 0. Negative prices are not allowed.' });
   }
 
-  const supplierPayout = parseFloat((unitPrice * qtyToSell).toFixed(2));
-  const grossProfit = Math.max(0, parseFloat((finalSoldPrice - supplierPayout).toFixed(2)));
+  // Fix: keep full precision — do NOT round to 2 decimals for small unit prices like 0.0168
+  const supplierPayout = unitPrice * qtyToSell;
+  const grossProfit = Math.max(0, finalSoldPrice - supplierPayout);
+
+  // VAT deducted from seller's gross profit only (supplier payout unchanged)
+  const vatAmount = parseFloat((grossProfit * parsedVatRate / 100).toFixed(6));
+  const sellerCredit = Math.max(0, parseFloat((grossProfit - vatAmount).toFixed(6)));
+
   const orderId = g2gOrderId || `G2G-ORD-${Math.floor(1000000 + Math.random() * 9000000)}`;
   const nowIso = new Date().toISOString();
   const remainingQty = currentTotalQty - qtyToSell;
@@ -763,15 +772,15 @@ app.post('/api/items/:id/mark-sold', async (req, res) => {
     if (process.env.MONGODB_URI) {
       await item.save();
       await Item.create(soldRecord);
-      if (grossProfit > 0) {
-        await User.updateOne({ id: sellerId }, { $inc: { balance: grossProfit } });
+      if (sellerCredit > 0) {
+        await User.updateOne({ id: sellerId }, { $inc: { balance: parseFloat(sellerCredit.toFixed(2)) } });
       }
       if (supplierPayout > 0) {
         const sup = await User.findOne({ id: item.supplierId });
         if (sup) {
-          sup.balance = parseFloat(((sup.balance || 0) + supplierPayout).toFixed(2));
+          sup.balance = parseFloat(((sup.balance || 0) + supplierPayout).toFixed(6));
           const sBals = sup.sellerBalances || {};
-          sBals[sellerId] = parseFloat(((sBals[sellerId] || 0) + supplierPayout).toFixed(2));
+          sBals[sellerId] = parseFloat(((sBals[sellerId] || 0) + supplierPayout).toFixed(6));
           sup.sellerBalances = sBals;
           sup.markModified('sellerBalances');
           await sup.save();
@@ -781,13 +790,13 @@ app.post('/api/items/:id/mark-sold', async (req, res) => {
       store.items.push(soldRecord);
       const seller = store.users.find((u) => u.id === sellerId);
       const supplier = store.users.find((u) => u.id === item.supplierId);
-      if (seller && grossProfit > 0) {
-        seller.balance = parseFloat((seller.balance + grossProfit).toFixed(2));
+      if (seller && sellerCredit > 0) {
+        seller.balance = parseFloat((seller.balance + sellerCredit).toFixed(6));
       }
       if (supplier && supplierPayout > 0) {
-        supplier.balance = parseFloat((supplier.balance + supplierPayout).toFixed(2));
+        supplier.balance = parseFloat((supplier.balance + supplierPayout).toFixed(6));
         supplier.sellerBalances = supplier.sellerBalances || {};
-        supplier.sellerBalances[sellerId] = parseFloat(((supplier.sellerBalances[sellerId] || 0) + supplierPayout).toFixed(2));
+        supplier.sellerBalances[sellerId] = parseFloat(((supplier.sellerBalances[sellerId] || 0) + supplierPayout).toFixed(6));
       }
       saveData(store);
     }
@@ -808,8 +817,11 @@ app.post('/api/items/:id/mark-sold', async (req, res) => {
       item,
       soldRecord,
       remainingQuantity: remainingQty,
-      profit: grossProfit,
-      supplierPayout
+      profit: parseFloat(sellerCredit.toFixed(4)),
+      grossProfit: parseFloat(grossProfit.toFixed(4)),
+      vatRate: parsedVatRate,
+      vatAmount: parseFloat(vatAmount.toFixed(4)),
+      supplierPayout: parseFloat(supplierPayout.toFixed(4))
     });
   } else {
     // FULL SALE:
@@ -822,15 +834,15 @@ app.post('/api/items/:id/mark-sold', async (req, res) => {
 
     if (process.env.MONGODB_URI) {
       await item.save();
-      if (grossProfit > 0) {
-        await User.updateOne({ id: sellerId }, { $inc: { balance: grossProfit } });
+      if (sellerCredit > 0) {
+        await User.updateOne({ id: sellerId }, { $inc: { balance: parseFloat(sellerCredit.toFixed(2)) } });
       }
       if (supplierPayout > 0) {
         const sup = await User.findOne({ id: item.supplierId });
         if (sup) {
-          sup.balance = parseFloat(((sup.balance || 0) + supplierPayout).toFixed(2));
+          sup.balance = parseFloat(((sup.balance || 0) + supplierPayout).toFixed(6));
           const sBals = sup.sellerBalances || {};
-          sBals[sellerId] = parseFloat(((sBals[sellerId] || 0) + supplierPayout).toFixed(2));
+          sBals[sellerId] = parseFloat(((sBals[sellerId] || 0) + supplierPayout).toFixed(6));
           sup.sellerBalances = sBals;
           sup.markModified('sellerBalances');
           await sup.save();
@@ -839,24 +851,25 @@ app.post('/api/items/:id/mark-sold', async (req, res) => {
     } else {
       const seller = store.users.find((u) => u.id === sellerId);
       const supplier = store.users.find((u) => u.id === item.supplierId);
-      if (seller && grossProfit > 0) {
-        seller.balance = parseFloat((seller.balance + grossProfit).toFixed(2));
+      if (seller && sellerCredit > 0) {
+        seller.balance = parseFloat((seller.balance + sellerCredit).toFixed(6));
       }
       if (supplier && supplierPayout > 0) {
-        supplier.balance = parseFloat((supplier.balance + supplierPayout).toFixed(2));
+        supplier.balance = parseFloat((supplier.balance + supplierPayout).toFixed(6));
         supplier.sellerBalances = supplier.sellerBalances || {};
-        supplier.sellerBalances[sellerId] = parseFloat(((supplier.sellerBalances[sellerId] || 0) + supplierPayout).toFixed(2));
+        supplier.sellerBalances[sellerId] = parseFloat(((supplier.sellerBalances[sellerId] || 0) + supplierPayout).toFixed(6));
       }
       saveData(store);
     }
 
+    const vatNote = parsedVatRate > 0 ? ` (VAT ${parsedVatRate}%: -$${vatAmount.toFixed(4)}, Seller nets $${sellerCredit.toFixed(4)})` : '';
     await logActivity(
       'ITEM_SOLD',
       item.lockedBySellerName,
-      `🎉 SOLD! "${item.title}" (${qtyToSell}x) on G2G for $${finalSoldPrice.toFixed(2)} (Order ${orderId}). Supplier +$${supplierPayout.toFixed(2)}${grossProfit > 0 ? `, Seller +$${grossProfit.toFixed(2)}` : ''}`
+      `🎉 SOLD! "${item.title}" (${qtyToSell}x) on G2G for $${finalSoldPrice.toFixed(4)} (Order ${orderId}). Supplier +$${supplierPayout.toFixed(4)}${grossProfit > 0 ? `, Seller +$${sellerCredit.toFixed(4)}${vatNote}` : ''}`
     );
     await broadcastUpdate('ITEM_SOLD', `🎉 "${item.title}" (${qtyToSell}x) SOLD on G2G for $${finalSoldPrice.toFixed(2)}!`, item.lockedBySellerName);
-    return res.json({ success: true, item, profit: grossProfit, supplierPayout });
+    return res.json({ success: true, item, profit: parseFloat(sellerCredit.toFixed(4)), grossProfit: parseFloat(grossProfit.toFixed(4)), vatRate: parsedVatRate, vatAmount: parseFloat(vatAmount.toFixed(4)), supplierPayout: parseFloat(supplierPayout.toFixed(4)) });
   }
 });
 

@@ -19,6 +19,7 @@
   let socket = null;
   let wsReconnectTimer = null;
   let currentProofBase64 = '';
+  let currentVatRate = 0; // 0, 19, or 25 — VAT % on seller commission
 
   function compressImage(file, maxWidth = 1280, maxHeight = 1280, quality = 0.8) {
     return new Promise((resolve) => {
@@ -122,9 +123,19 @@
   function fmtCurrency(val) {
     const num = parseFloat(val) || 0;
     if (num === 0) return '$0.00';
+    if (num < 0.001) return `$${num.toFixed(6)}`;
     if (num < 0.01) return `$${num.toFixed(4)}`;
-    if (num < 1 && (num * 100) % 1 !== 0) return `$${num.toFixed(3)}`;
+    if (num < 1 && (num * 100) % 1 !== 0) return `$${num.toFixed(4)}`;
     return `$${num.toFixed(2)}`;
+  }
+
+  // Precision-preserving number formatter for input fields (no $ sign)
+  function precisionVal(num) {
+    if (num === 0) return '0';
+    if (num < 0.001) return num.toFixed(6);
+    if (num < 0.01) return num.toFixed(4);
+    if (num < 1) return num.toFixed(4);
+    return num.toFixed(2);
   }
 
   function formatRelativeTime(dateStr) {
@@ -1200,14 +1211,23 @@
       const priceVal = parseFloat(claimPriceInput?.value) || 0;
       const qtyVal = parseInt(document.getElementById('claimItemQty')?.textContent, 10) || 1;
       if (!hint) return;
+      const user = getCurrentUser();
+      const feeRate = user.commissionRate || 10; // G2G platform takes this %
       if (priceVal > 0) {
+        const totalListing = priceVal * qtyVal;
+        const feeAmt = totalListing * (feeRate / 100);
+        const sellerNets = totalListing - feeAmt;
         if (qtyVal > 1) {
-          hint.innerHTML = `Total Listing Price: <strong>${fmtCurrency(priceVal * qtyVal)}</strong> (${qtyVal} pcs × ${fmtCurrency(priceVal)} each). No 10% added.`;
+          hint.innerHTML = `Total: <strong>${fmtCurrency(totalListing)}</strong> (${qtyVal} × ${fmtCurrency(priceVal)})`
+            + ` &nbsp;&middot;&nbsp; G2G Fee ${feeRate}%: <span style="color:var(--accent-red)">-${fmtCurrency(feeAmt)}</span>`
+            + ` &nbsp;&middot;&nbsp; You receive: <strong style="color:var(--accent-green)">${fmtCurrency(sellerNets)}</strong>`;
         } else {
-          hint.innerHTML = `Listing Price: <strong>${fmtCurrency(priceVal)}</strong>. Direct price, no 10% added.`;
+          hint.innerHTML = `Listing: <strong>${fmtCurrency(priceVal)}</strong>`
+            + ` &nbsp;&middot;&nbsp; G2G Fee ${feeRate}%: <span style="color:var(--accent-red)">-${fmtCurrency(feeAmt)}</span>`
+            + ` &nbsp;&middot;&nbsp; You receive: <strong style="color:var(--accent-green)">${fmtCurrency(sellerNets)}</strong>`;
         }
       } else {
-        hint.textContent = 'Direct listing price — no 10% added.';
+        hint.textContent = `Enter price — G2G takes ${feeRate}% platform fee from your earnings.`;
       }
     }
     if (claimPriceInput) claimPriceInput.addEventListener('input', updateClaimPriceHint);
@@ -1269,10 +1289,16 @@
       const hint = document.getElementById('editPriceHint');
       const priceVal = parseFloat(editPriceInput?.value) || 0;
       if (!hint) return;
+      const user = getCurrentUser();
+      const feeRate = user.commissionRate || 10; // G2G platform takes this %
       if (priceVal > 0) {
-        hint.innerHTML = `New Listing Price: <strong>${fmtCurrency(priceVal)}</strong>. Direct price, no 10% added.`;
+        const feeAmt = priceVal * (feeRate / 100);
+        const sellerNets = priceVal - feeAmt;
+        hint.innerHTML = `Listing: <strong>${fmtCurrency(priceVal)}</strong>`
+          + ` &nbsp;&middot;&nbsp; G2G Fee ${feeRate}%: <span style="color:var(--accent-red)">-${fmtCurrency(feeAmt)}</span>`
+          + ` &nbsp;&middot;&nbsp; You receive: <strong style="color:var(--accent-green)">${fmtCurrency(sellerNets)}</strong>`;
       } else {
-        hint.textContent = 'Direct price — no 10% added.';
+        hint.textContent = `Enter price — G2G takes ${feeRate}% platform fee from your earnings.`;
       }
     }
     if (editPriceInput) editPriceInput.addEventListener('input', updateEditPriceHint);
@@ -1435,19 +1461,32 @@
 
       if (payoutEl) payoutEl.value = fmtCurrency(totalCost);
 
+      // Fix: preserve full precision for small prices (no toFixed(2) rounding)
       if (finalPriceEl && (!finalPriceEl.dataset.userEdited || finalPriceEl.dataset.lastQty != soldQty)) {
-        finalPriceEl.value = totalCost.toFixed(2);
+        finalPriceEl.value = precisionVal(totalCost);
         finalPriceEl.dataset.lastQty = soldQty;
       }
 
       const finalSoldPrice = parseFloat(finalPriceEl?.value) || totalCost;
       const grossProfit = Math.max(0, finalSoldPrice - totalCost);
 
+      // VAT calculation on seller's commission (grossProfit)
+      const vatAmount = grossProfit * (currentVatRate / 100);
+      const sellerNet = Math.max(0, grossProfit - vatAmount);
+
       if (profitPreview) {
         if (finalSoldPrice <= 0) {
           profitPreview.innerHTML = `<span style="color: var(--accent-red); font-weight: 700;">⚠️ Price must be greater than $0.00.</span>`;
         } else {
-          profitPreview.innerHTML = `Final G2G Sale Price: <strong>${fmtCurrency(finalSoldPrice)}</strong> (${soldQty} pcs). Supplier: ${fmtCurrency(totalCost)}${grossProfit > 0 ? `, Profit: <strong>+${fmtCurrency(grossProfit)}</strong>` : ''}. No 10% added.`;
+          let html = `Sale: <strong>${fmtCurrency(finalSoldPrice)}</strong> (${soldQty} pcs) · Supplier gets: <strong>${fmtCurrency(totalCost)}</strong>`;
+          if (grossProfit > 0) {
+            html += ` · Seller gross: <strong>+${fmtCurrency(grossProfit)}</strong>`;
+            if (currentVatRate > 0) {
+              html += ` · VAT ${currentVatRate}%: <span style="color:var(--accent-red)">-${fmtCurrency(vatAmount)}</span>`;
+              html += ` · <strong style="color:var(--accent-cyan)">Seller nets: +${fmtCurrency(sellerNet)}</strong>`;
+            }
+          }
+          profitPreview.innerHTML = html;
         }
       }
 
@@ -1470,6 +1509,21 @@
         updateMarkSoldCalculations();
       });
     }
+
+    // VAT toggle buttons
+    document.querySelectorAll('.vat-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentVatRate = parseInt(btn.dataset.vat) || 0;
+        document.querySelectorAll('.vat-toggle-btn').forEach(b => {
+          const isActive = b === btn;
+          b.style.background = isActive ? 'rgba(0,240,255,0.2)' : (b.dataset.vat === '0' ? 'rgba(0,240,255,0.05)' : b.dataset.vat === '19' ? 'rgba(255,183,3,0.05)' : 'rgba(255,51,102,0.05)');
+          b.style.color = isActive ? 'var(--accent-cyan)' : 'var(--text-dim)';
+          b.style.borderColor = isActive ? 'rgba(0,240,255,0.5)' : (b.dataset.vat === '0' ? 'rgba(255,255,255,0.1)' : b.dataset.vat === '19' ? 'rgba(255,183,3,0.2)' : 'rgba(255,51,102,0.2)');
+          b.style.fontWeight = isActive ? '800' : '700';
+        });
+        updateMarkSoldCalculations();
+      });
+    });
 
     // Proof Upload & Paste Handling
     const proofDropZone = document.getElementById('proofDropZone');
@@ -1572,17 +1626,27 @@
               g2gOrderId,
               finalPrice,
               soldQuantity: soldQty,
-              proofImage: currentProofBase64
+              proofImage: currentProofBase64,
+              vatRate: currentVatRate
             })
           });
           const data = await res.json();
           if (data.success) {
             closeModal(document.getElementById('modalMarkSold'));
             setProofImage('');
+            // Reset VAT back to none
+            currentVatRate = 0;
+            document.querySelectorAll('.vat-toggle-btn').forEach(b => {
+              const isNone = b.dataset.vat === '0';
+              b.style.background = isNone ? 'rgba(0,240,255,0.12)' : (b.dataset.vat === '19' ? 'rgba(255,183,3,0.05)' : 'rgba(255,51,102,0.05)');
+              b.style.color = isNone ? 'var(--accent-cyan)' : 'var(--text-dim)';
+              b.style.borderColor = isNone ? 'rgba(0,240,255,0.5)' : (b.dataset.vat === '19' ? 'rgba(255,183,3,0.2)' : 'rgba(255,51,102,0.2)');
+            });
             if (data.remainingQuantity > 0) {
               showToast(`Partial sale recorded! Sold ${soldQty} pcs. ${data.remainingQuantity} pcs remain locked for you.`, 'success');
             } else {
-              showToast(`Sale recorded! Credited ${fmtCurrency(data.profit)} to seller balance.`, 'success');
+              const vatNote = currentVatRate > 0 ? ` (after VAT ${currentVatRate}%)` : '';
+              showToast(`Sale recorded! Seller profit: ${fmtCurrency(data.profit)}${vatNote}`, 'success');
             }
             playNotification('sold');
             await fetchState();
